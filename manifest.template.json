@@ -1,0 +1,16 @@
+{
+  "name": "附件描述",
+  "version": "{{VERSION}}",
+  "manifest_version": 1,
+  "author": "Status Peek Plus",
+  "description": "为 PROP / ATTACHMENT 图层物件添加状态描述，并保存为唯一存档：之后重新拖出同一张图片会自动带上描述，场景中的改动也会自动回写。",
+  "icon": "{{BASE}}icon-v3.svg",
+  "action": {
+    "title": "附件描述",
+    "icon": "{{BASE}}icon-v3.svg",
+    "popover": "{{BASE}}action.html",
+    "width": 360,
+    "height": 520
+  },
+  "background_url": "{{BASE}}background.html"
+}

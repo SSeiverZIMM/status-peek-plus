@@ -1,0 +1,31 @@
+{
+  "name": "status-peek-plus",
+  "private": true,
+  "version": "1.1.0",
+  "type": "module",
+  "license": "GPL-3.0-only",
+  "author": "SSeiverZIMM",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/SSeiverZIMM/status-peek-plus.git"
+  },
+  "description": "附件描述 —— 为 PROP / ATTACHMENT 图层物件添加状态描述，并可跨场景持久化",
+  "scripts": {
+    "build": "tsc --noEmit && vite build",
+    "pack": "node pack.mjs",
+    "test": "node test-runtime.mjs",
+    "dev": "vite",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@owlbear-rodeo/sdk": "^3.1.0"
+  },
+  "optionalDependencies": {
+    "@esbuild/win32-x64": "^0.28.2",
+    "@rollup/rollup-win32-x64-msvc": "^4.63.5"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.5",
+    "vite": "^5.2.0"
+  }
+}

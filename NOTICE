@@ -1,0 +1,140 @@
+附件描述（status-peek-plus）
+Copyright (C) 2026 SSeiverZIMM
+
+本程序是自由软件：你可以依据自由软件基金会发布的 GNU 通用公共许可证
+第 3 版（GPL-3.0-only）条款重新分发和/或修改它。
+
+本程序希望它有用，但**不提供任何担保**，甚至不提供适销性或特定用途
+适用性的默示担保。详见 LICENSE 文件。
+
+================================================================================
+一、上游来源与衍生说明
+================================================================================
+
+本项目的「持久化（Persistent Tokens）」功能改编自以下开源项目：
+
+    项目名称：owlbear-persistence
+    作者    ：desain
+    仓库地址：https://github.com/desain/owlbear-persistence
+    许可证  ：GNU GPL v3
+    版本    ：1.2.2
+    基准提交：18ff272b2b6eddb3cd08a39cad75ef87b88d3a0b
+              （2026-01-08，"ci: update manifest version"）
+
+关于许可版本的说明
+--------------------------------------------------------------------------------
+
+上游仓库的 README 声明为 "GNU GPLv3"，其 LICENSE 文件是 GNU 官方提供的
+标准 GPL-3.0 文本，且未在其中填写具体的版权行（仍为
+`Copyright (C) <year> <name of author>` 模板占位）。
+
+因此本项目按 **GPL-3.0-only** 处理，**未声明 "or later"**，以避免超出
+上游作者实际授予的许可范围。
+
+================================================================================
+二、衍生文件与改动清单
+================================================================================
+
+以下文件包含改编自上游的代码。按照 GPL-3.0 第 5 条关于「修改过的文件必须
+带有显著的改动声明」的要求，各文件头部均写明了来源与改动，此处汇总：
+
+    本项目文件                    上游对应文件                              改动性质
+    ----------------------------------------------------------------------------------
+    src/persist/model.ts          src/state/PersistedToken.ts               改编
+    src/persist/attachments.ts    src/action/processAttachments.ts          移植（逻辑未改）
+    src/persist/store.ts          src/state/usePlayerStorage.ts             改编
+    src/persist/apply.ts          src/action/applyPersisted.ts              改编
+    src/ui/panel-templates.ts     src/action/Action.tsx
+                                  src/action/TokenCard.tsx
+                                  src/action/Settings.tsx                   重写
+
+各文件的具体改动：
+
+  · src/persist/model.ts
+      去除 immer 与 owlbear-utils 依赖，改写为纯函数 + 普通 TypeScript 类型。
+      属性集合由 5 类（METADATA / ATTACHMENTS / TEXT / DESCRIPTION / LAYER）
+      收窄为 2 类（METADATA / ATTACHMENTS）。
+
+  · src/persist/attachments.ts
+      坐标换算逻辑**未改动**，仅将入参类型从 Token 放宽为最小必要字段
+      （Positioned），以解除对物品类型的强依赖。
+
+  · src/persist/store.ts
+      去除 Zustand / immer / React 依赖，改为
+      「localStorage + 内存副本 + 订阅回调」模型。
+      新增 beginWrite() 以修正跨 iframe 内存副本互相覆盖的问题。
+
+  · src/persist/apply.ts
+      改为直接从 store 模块读取，去除 Zustand 依赖。
+
+  · src/ui/panel-templates.ts
+      由 React + MUI 重写为零依赖的原生 DOM 实现。
+      砍掉模糊搜索（改为普通子串过滤）与弹窗自适应高度。
+
+其余文件为新写代码
+--------------------------------------------------------------------------------
+
+src/background.ts、src/action.ts、src/edit.ts、src/shared.ts、
+src/ui/panel-peek.ts、src/ui/style.ts、pack.mjs、test-runtime.mjs
+等为本项目新写。
+
+其中 src/shared.ts 的元数据键（status-peek/text、status-peek/has）与
+右键菜单的交互设计来自作者更早的自有扩展 Status Peek；
+src/background.ts 的右键菜单注册思路参考了上游的
+src/contextmenu/contextmenu.ts，但实现已完全重写（上游注册 4 个菜单项，
+本项目只注册 1 个，持久化操作改由 action 面板承担）。
+
+================================================================================
+三、与上游的功能差异
+================================================================================
+
+1. 作用域收窄
+   仅对 PROP / ATTACHMENT 图层物件生效；上游覆盖全部 token 类型。
+
+2. 属性收窄
+   仅保留 METADATA 与 ATTACHMENTS；移除 TEXT / DESCRIPTION / LAYER。
+
+3. 新增描述编辑能力
+   合并原 Status Peek 的「附件描述」文本编辑与玩家点选查看。
+
+4. 去除前端框架
+   UI 层为零运行时依赖的原生 DOM 实现，不再引入 React / MUI / Zustand / immer。
+
+5. 存档入口唯一化
+   只在 action 面板卡片上提供「存档 / 取消存档」，默认使用 UNIQUE（唯一）模式。
+
+6. 缺陷修正
+   · 跨 iframe 内存副本互相覆盖，导致「有时能保存有时不能」；
+   · 已存在的 UNIQUE 项被静默跳过，界面上毫无反馈；
+   · 同一图片存在多个实例时，自动同步整个停摆。
+
+7. 工程配套
+   新增 64 项断言的运行时测试（test-runtime.mjs）与零依赖打包脚本（pack.mjs）。
+
+8. 部署形态
+   产物中的资源引用统一为绝对 URL（OBR 会以域名根为基准解析相对路径，
+   子目录部署下相对路径必然失败，详见 src/shared.ts 注释）。
+
+================================================================================
+四、第三方组件
+================================================================================
+
+构建产物（dist/）内联打包了若干第三方组件，其版权声明与许可全文见
+同目录的 THIRD-PARTY-NOTICES.md。主要包括：
+
+    @owlbear-rodeo/sdk   MIT
+    immer                MIT
+    uuid                 MIT
+    events               MIT
+    js-base64            BSD-3-Clause
+
+================================================================================
+五、获取源代码
+================================================================================
+
+GPL-3.0 要求在以二进制形式分发时一并提供对应源代码。本项目采用
+「源码与发行包同仓库」的方式满足该要求：
+
+    https://github.com/SSeiverZIMM/status-peek-plus
+
+构建方式见 README.md。

@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <!--
+    单色线条图标：只用形状，不依赖颜色。
+    若平台对 action 图标做单色化（mask / currentColor），本图仍能正常成形。
+    线条加粗，确保缩到 24px 时仍可辨。
+  -->
+  <g fill="none" stroke="#FFFFFF" stroke-width="9" stroke-linecap="round" stroke-linejoin="round">
+    <!-- 便签卡轮廓 -->
+    <rect x="24" y="34" width="80" height="80" rx="12"/>
+    <!-- 描述文字线 -->
+    <path d="M44 60 H84"/>
+    <path d="M44 82 H84"/>
+    <path d="M44 100 H66"/>
+  </g>
+  <!-- 图钉：表示「持久化保存」 -->
+  <circle cx="64" cy="26" r="13" fill="#FFFFFF"/>
+</svg>
