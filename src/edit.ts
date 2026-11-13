@@ -44,16 +44,31 @@ const cancelBtn = document.getElementById("cancel") as HTMLButtonElement;
 const clearBtn = document.getElementById("clear") as HTMLButtonElement;
 
 function buildPresets(): void {
+    presetsEl.innerHTML = "";
     for (const c of PRESET_COLORS) {
         const b = document.createElement("button");
         b.type = "button";
         b.className = "swatch";
         b.style.background = c;
         b.title = c;
+        b.dataset.color = c;
         b.addEventListener("click", () => {
             colorInput.value = c;
+            updateSwatchSelection();
         });
         presetsEl.appendChild(b);
+    }
+    updateSwatchSelection();
+}
+
+/** 给与当前颜色一致的色标加选中环（仅限固定色标，自选色不在此列） */
+function updateSwatchSelection(): void {
+    const cur = colorInput.value.toLowerCase();
+    for (const b of presetsEl.querySelectorAll<HTMLButtonElement>(".swatch")) {
+        b.classList.toggle(
+            "selected",
+            (b.dataset.color ?? "").toLowerCase() === cur,
+        );
     }
 }
 
@@ -78,6 +93,7 @@ async function load(): Promise<void> {
         textarea.value = peek.descPlain;
         roundsInput.value = String(peek.rounds);
         colorInput.value = /^#[0-9a-f]{6}$/i.test(peek.color) ? peek.color : "#ff00d0";
+        updateSwatchSelection();
 
         titleEl.textContent =
             items.length > 1

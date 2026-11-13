@@ -7,7 +7,7 @@
  * 所以逻辑集中在这里，两个面板共用。
  */
 
-import OBR, { type Item } from "@owlbear-rodeo/sdk";
+import OBR, { buildImage, type Item } from "@owlbear-rodeo/sdk";
 import {
     META_HAS,
     writePeek,
@@ -48,6 +48,8 @@ export interface ApplyResult {
     written: number;
     /** 没处理的（读不到图层等） */
     failed: number;
+    /** 失败/跳过的具体原因（v2.0.2 起，供通知展示） */
+    errors: string[];
 }
 
 /**
@@ -67,7 +69,13 @@ export async function applyEntry(
     entry: ArchiveEntry,
     targetIds: readonly string[],
 ): Promise<ApplyResult> {
-    const result: ApplyResult = { created: 0, reused: 0, written: 0, failed: 0 };
+    const result: ApplyResult = {
+        created: 0,
+        reused: 0,
+        written: 0,
+        failed: 0,
+        errors: [],
+    };
     if (targetIds.length === 0) return result;
 
     const round = await currentRound();
@@ -80,6 +88,12 @@ export async function applyEntry(
     if (!entry.imageUrl) {
         const okTargets = targets.filter((t) => t.layer === "ATTACHMENT");
         result.failed = targets.length - okTargets.length;
+        if (result.failed > 0) {
+            result.errors.push(
+                `纯文字状态只能套用到附件（ATTACHMENT 层）物件，` +
+                    `${result.failed} 个非附件目标已跳过`,
+            );
+        }
         if (okTargets.length > 0) {
             await OBR.scene.items.updateItems(
                 okTargets.map((t) => t.id),
@@ -118,33 +132,37 @@ export async function applyEntry(
         }
 
         // 新建 attachment：居中放在目标 token 上
+        // 【v2.0.2】用 buildImage 组装，grid/text 等必填字段由 SDK 默认值补齐
+        // （手写精简对象会被枭熊校验拒绝，这正是「套用 1 个失败」的来源）
         const tW = (target as { width?: number }).width ?? 0;
         const tH = (target as { height?: number }).height ?? 0;
         const centerX = target.position.x + tW / 2;
         const centerY = target.position.y + tH / 2;
-        const newId = crypto.randomUUID();
         try {
-            await OBR.scene.items.addItems([
-                {
-                    id: newId,
-                    type: "IMAGE",
-                    layer: "ATTACHMENT",
-                    attachedTo: target.id,
-                    position: {
-                        x: centerX - imgContent.width / 2,
-                        y: centerY - imgContent.height / 2,
-                    },
-                    zIndex: (target.zIndex ?? 0) + 1,
-                    name: entry.name || "状态图标",
-                    // 完整图片内容：缺尺寸在枭熊里渲染成不可见
-                    image: { ...imgContent },
-                    metadata: { ...patch },
-                    lastModified: new Date().toISOString(),
-                } as unknown as Item,
-            ]);
+            const item = buildImage({ ...imgContent }, {
+                offset: { x: 0, y: 0 },
+                dpi: 1,
+            })
+                .layer("ATTACHMENT")
+                .build();
+            item.attachedTo = target.id;
+            item.position = {
+                x: centerX - imgContent.width / 2,
+                y: centerY - imgContent.height / 2,
+            };
+            item.zIndex = (target.zIndex ?? 0) + 1;
+            item.name = entry.name || "状态图标";
+            item.metadata = { ...patch };
+            (item as { lastModified?: string }).lastModified =
+                new Date().toISOString();
+            await OBR.scene.items.addItems([item as unknown as Item]);
             result.created++;
-        } catch {
+        } catch (e) {
             result.failed++;
+            result.errors.push(
+                `创建贴图附件失败：${e instanceof Error ? e.message : String(e)}`,
+            );
+            console.error("[状态描述] 创建附件失败", e);
         }
     }
 

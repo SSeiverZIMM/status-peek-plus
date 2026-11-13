@@ -351,9 +351,10 @@ function buildCard(
             }
 const r = await applyEntry(entry, ids);
             const done = r.created + r.reused + r.written;
+            const reason = r.errors.length > 0 ? `：${r.errors[0]}` : "";
             void OBR.notification.show(
                 r.failed > 0
-                    ? `已套用 ${done}/${ids.length} 个（${r.failed} 个失败）`
+                    ? `已套用 ${done}/${ids.length} 个（${r.failed} 个失败）${reason}`
                     : `已套用到 ${done} 个目标`,
                 r.failed > 0 ? "WARNING" : "SUCCESS",
             );

@@ -1,4 +1,4 @@
-import"./shared-BbRyBCYS.js";const p="spp-style",r=`
+import"./shared-Di2CeDPH.js";const p="spp-style",r=`
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body { height: 100%; }
   body {
@@ -213,10 +213,9 @@ import"./shared-BbRyBCYS.js";const p="spp-style",r=`
   }
   #name:focus, #rounds:focus { outline: none; border-color: var(--spp-accent); }
   .color-row { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
-  #color {
-    width: 38px; height: 28px; padding: 0;
-    border: 1px solid var(--spp-line);
-    border-radius: 6px; background: none; cursor: pointer; flex: none;
+  #color { display: none; }
+  .presets .swatch.selected {
+    outline: 2px solid var(--spp-accent); outline-offset: 1px;
   }
   .presets { display: flex; flex-wrap: wrap; gap: 5px; }
   .presets .swatch {

@@ -230,10 +230,9 @@ export const CSS = `
   }
   #name:focus, #rounds:focus { outline: none; border-color: var(--spp-accent); }
   .color-row { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
-  #color {
-    width: 38px; height: 28px; padding: 0;
-    border: 1px solid var(--spp-line);
-    border-radius: 6px; background: none; cursor: pointer; flex: none;
+  #color { display: none; }
+  .presets .swatch.selected {
+    outline: 2px solid var(--spp-accent); outline-offset: 1px;
   }
   .presets { display: flex; flex-wrap: wrap; gap: 5px; }
   .presets .swatch {
