@@ -103,6 +103,27 @@ export function sanitizeEntry(raw: unknown): ArchiveEntry | null {
                                   : "image/png",
                       }
                     : undefined,
+            grid: isObject(s.grid)
+                ? {
+                      offset: isObject(s.grid.offset)
+                          ? {
+                                x: typeof s.grid.offset.x === "number"
+                                    ? s.grid.offset.x
+                                    : 0,
+                                y: typeof s.grid.offset.y === "number"
+                                    ? s.grid.offset.y
+                                    : 0,
+                            }
+                          : { x: 0, y: 0 },
+                      dpi: typeof s.grid.dpi === "number" ? s.grid.dpi : 1,
+                  }
+                : undefined,
+            scale: isObject(s.scale)
+                ? {
+                      x: typeof s.scale.x === "number" ? s.scale.x : 1,
+                      y: typeof s.scale.y === "number" ? s.scale.y : 1,
+                  }
+                : undefined,
             attachments: s.attachments ?? [],
             lastModified:
                 typeof s.lastModified === "string"
@@ -500,6 +521,12 @@ export async function captureFromItem(
                     };
                 }
             ).image,
+            grid: (
+                item as { grid?: { offset: { x: number; y: number }; dpi: number } }
+            ).grid,
+            scale: (
+                item as { scale?: { x: number; y: number } }
+            ).scale,
             // 附件存相对坐标：processAttachments 会减去宿主位置并把
             // attachedTo 换成 ROOT，restoreAttachments 再还原。
             attachments: processAttachmentsSafe(item, attachments),

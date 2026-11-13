@@ -106,8 +106,10 @@ export async function applyEntry(
         return result;
     }
 
-    // --- 带图标：解析完整图片内容（尺寸/MIME 缺失会渲染成不可见） ---
-    const imgContent = await resolveImageContent(entry);
+    // --- 带图标：解析完整视觉参数（图片/网格/缩放） ---
+    // 渲染尺寸 = (image.width ÷ grid.dpi) × 场景格距，三者缺一不可
+    const visual = await resolveStickerVisual(entry);
+    const sceneDpi = await OBR.scene.grid.getDpi().catch(() => 150);
 
     for (const target of targets) {
         // 目标自己就是那张图
@@ -139,16 +141,26 @@ export async function applyEntry(
         const centerX = target.position.x + tW / 2;
         const centerY = target.position.y + tH / 2;
         try {
-            const item = buildImage({ ...imgContent }, {
-                offset: { x: 0, y: 0 },
-                dpi: 1,
+            const item = buildImage({ ...visual.image }, {
+                offset: { ...visual.grid.offset },
+                dpi: visual.grid.dpi,
             })
                 .layer("ATTACHMENT")
+                .scale({ x: visual.scale.x, y: visual.scale.y })
                 .build();
             item.attachedTo = target.id;
+            // 渲染尺寸（场景像素）= 格数 × 场景格距 × 缩放
+            const renderedW =
+                (visual.image.width / visual.grid.dpi) *
+                sceneDpi *
+                visual.scale.x;
+            const renderedH =
+                (visual.image.height / visual.grid.dpi) *
+                sceneDpi *
+                visual.scale.y;
             item.position = {
-                x: centerX - imgContent.width / 2,
-                y: centerY - imgContent.height / 2,
+                x: centerX - renderedW / 2,
+                y: centerY - renderedH / 2,
             };
             item.zIndex = (target.zIndex ?? 0) + 1;
             item.name = entry.name || "状态图标";
@@ -170,31 +182,22 @@ export async function applyEntry(
 }
 
 /**
- * 解析素材图标的完整图片内容（width/height/mime）。
+ * 解析贴纸的完整视觉参数（image + grid + scale）。
  *
- * 解析顺序：条目快照 → 场景里同图实例 → 加载图片取自然尺寸。
- * 没有尺寸的图片在枭熊里会渲染成不可见——这是「attachment 套不上」的元凶。
+ * 渲染尺寸 = (image.width ÷ grid.dpi) × 场景格距 × scale——三者缺一不可：
+ * grid.dpi 给 1 会让一张 1024px 的原图铺满上千个格子（「贴出来巨大」的元凶）。
+ *
+ * 解析顺序：
+ *   1. 场景里同图实例 → image/grid/scale 全量复刻，与场景所见完全一致；
+ *   2. 条目快照（绑定时的状态；旧条目无 grid → 按图宽折算渲染 1 格）；
+ *   3. 加载图片取自然尺寸 → 渲染 1 格。
  */
-async function resolveImageContent(entry: ArchiveEntry): Promise<{
-    url: string;
-    width: number;
-    height: number;
-    mime: string;
+async function resolveStickerVisual(entry: ArchiveEntry): Promise<{
+    image: { url: string; width: number; height: number; mime: string };
+    grid: { offset: { x: number; y: number }; dpi: number };
+    scale: { x: number; y: number };
 }> {
-    const fallback = {
-        url: entry.imageUrl,
-        width: 150,
-        height: 150,
-        mime: "image/png",
-    };
-
-    // 1) 条目快照里存的图标内容
-    const snapImg = entry.snapshot?.image;
-    if (snapImg && snapImg.width > 0 && snapImg.height > 0) {
-        return snapImg;
-    }
-
-    // 2) 场景里找同图实例，借用它的图片内容
+    // 1) 场景同图实例：全量复刻
     const items = await OBR.scene.items
         .getItems((i) => imageUrlOf(i) === entry.imageUrl)
         .catch(() => [] as Item[]);
@@ -207,25 +210,76 @@ async function resolveImageContent(entry: ArchiveEntry): Promise<{
                     height?: number;
                     mime?: string;
                 };
+                grid?: { offset?: { x: number; y: number }; dpi?: number };
+                scale?: { x: number; y: number };
+            }
+        ).image
+            ? it
+            : null;
+        if (!ic) continue;
+        const image = (
+            ic as unknown as {
+                image?: {
+                    url?: string;
+                    width?: number;
+                    height?: number;
+                    mime?: string;
+                };
             }
         ).image;
         if (
-            ic &&
-            typeof ic.width === "number" &&
-            ic.width > 0 &&
-            typeof ic.height === "number" &&
-            ic.height > 0
+            typeof image?.width !== "number" ||
+            image.width <= 0 ||
+            typeof image.height !== "number" ||
+            image.height <= 0
         ) {
-            return {
-                url: entry.imageUrl,
-                width: ic.width,
-                height: ic.height,
-                mime: typeof ic.mime === "string" ? ic.mime : "image/png",
-            };
+            continue;
         }
+        const grid = (
+            ic as { grid?: { offset?: { x: number; y: number }; dpi?: number } }
+        ).grid;
+        const scale = (
+            ic as { scale?: { x: number; y: number } }
+        ).scale;
+        return {
+            image: {
+                url: entry.imageUrl,
+                width: image.width,
+                height: image.height,
+                mime: typeof image.mime === "string" ? image.mime : "image/png",
+            },
+            grid:
+                grid && typeof grid.dpi === "number" && grid.dpi > 0
+                    ? {
+                          offset: { ...(grid.offset ?? { x: 0, y: 0 }) },
+                          dpi: grid.dpi,
+                      }
+                    : { offset: { x: 0, y: 0 }, dpi: image.width },
+            scale:
+                scale && typeof scale.x === "number"
+                    ? {
+                          x: scale.x,
+                          y: typeof scale.y === "number" ? scale.y : scale.x,
+                      }
+                    : { x: 1, y: 1 },
+        };
     }
 
-    // 3) 兜底：直接加载图片取自然尺寸
+    // 2) 条目快照
+    const snapImg = entry.snapshot?.image;
+    if (snapImg && snapImg.width > 0 && snapImg.height > 0) {
+        const g = entry.snapshot?.grid;
+        return {
+            image: snapImg,
+            grid:
+                g && g.dpi > 0
+                    ? { offset: { ...(g.offset ?? { x: 0, y: 0 }) }, dpi: g.dpi }
+                    : { offset: { x: 0, y: 0 }, dpi: snapImg.width },
+            scale: entry.snapshot?.scale ?? { x: 1, y: 1 },
+        };
+    }
+
+    // 3) 加载图片取自然尺寸 → 渲染 1 格
     const dims = await new Promise<{ w: number; h: number }>((resolve) => {
         const im = new Image();
         im.onload = () =>
@@ -237,7 +291,16 @@ async function resolveImageContent(entry: ArchiveEntry): Promise<{
         im.src = entry.imageUrl;
         setTimeout(() => resolve({ w: 150, h: 150 }), 3000);
     });
-    return { ...fallback, width: dims.w, height: dims.h };
+    return {
+        image: {
+            url: entry.imageUrl,
+            width: dims.w,
+            height: dims.h,
+            mime: "image/png",
+        },
+        grid: { offset: { x: 0, y: 0 }, dpi: dims.w || 150 },
+        scale: { x: 1, y: 1 },
+    };
 }
 
 /**

@@ -102,6 +102,10 @@ export interface ArchiveEntry {
         name: string;
         /** 绑定图标的图片内容（含尺寸与 MIME）。套用贴图时用它，缺了会现场解析。 */
         image?: { url: string; width: number; height: number; mime: string };
+        /** 绑定时的网格设置：渲染尺寸 = (image.width ÷ grid.dpi) × 场景格距 */
+        grid?: { offset: { x: number; y: number }; dpi: number };
+        /** 绑定时的缩放 */
+        scale?: { x: number; y: number };
         /** 相对坐标的附件列表 */
         attachments: unknown;
         lastModified: string;
