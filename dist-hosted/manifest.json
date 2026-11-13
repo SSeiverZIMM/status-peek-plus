@@ -1,0 +1,16 @@
+{
+  "name": "状态描述",
+  "version": "2.0.0",
+  "manifest_version": 1,
+  "author": "Status Peek Plus",
+  "description": "把自己上传的图片标记贴到 token 上，写好规则文本与持续轮数。玩家切到「查看状态描述」模式，鼠标移到标记上就能看到说明，轮数与先攻扩展的回合数联动。",
+  "icon": "https://env-00jy6try6vgy-static.normal.cloudstatic.cn/status-peek/icon-v3.svg",
+  "action": {
+    "title": "状态描述",
+    "icon": "https://env-00jy6try6vgy-static.normal.cloudstatic.cn/status-peek/icon-v3.svg",
+    "popover": "https://env-00jy6try6vgy-static.normal.cloudstatic.cn/status-peek/action.html",
+    "width": 360,
+    "height": 560
+  },
+  "background_url": "https://env-00jy6try6vgy-static.normal.cloudstatic.cn/status-peek/background.html"
+}

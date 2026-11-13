@@ -1,14 +1,25 @@
 /**
- * [附件描述] 面板
+ * [状态] 面板 —— 画布上选中物件的状态查看/编辑
  *
- * 来自 Status Peek 的 action.ts，改为可复用的渲染函数。
- * 新增：每张卡片右侧的「保存 / 取消」小按钮（持久化快捷入口）。
+ * 与 [素材库] 的分工：
+ *   本面板管「画布上现在有什么」——选中什么、状态是什么、怎么改
+ *   素材库管「有哪些可复用的」——存、套用、发布
+ * 两者通过ArchiveEntry 串起来：这里改完可以「存为素材」，
+ * 素材库里也可以「套用到选中」。
  */
 
 import OBR, { type Item } from "@owlbear-rodeo/sdk";
-import { MODAL_EDIT_ID, readPeek, siblingUrl } from "../shared";
-import { findByKey, getTokens, persist, removeToken } from "../persist/store";
-import { persistedTokenKey, persistedTokenGetName } from "../persist/model";
+import {
+    MODAL_EDIT_ID,
+    readCombatRound,
+    readPeek,
+    remainingRounds,
+    siblingUrl,
+} from "../shared";
+import { reviveExpired } from "../rounds";
+import { captureFromItem, findById, listAll } from "../archive";
+import { applyEntry } from "../apply";
+import type { ArchiveEntry } from "../shared";
 
 export interface PeekPanelCtx {
     role: "GM" | "PLAYER";
@@ -31,125 +42,244 @@ export function openEdit(ids: readonly string[]): void {
     });
 }
 
-/**
- * 保存该物件为「唯一存档」（全插件唯一的存档入口）
- *
- * 不传 type —— 默认即 UNIQUE：物件在场景中的后续改动会自动回写。
- * 保存结果会明确通知，避免旧版那种「点了没反应」的静默失败。
- */
-async function quickPersist(item: Item): Promise<void> {
-    const attachments = (
-        await OBR.scene.items.getItemAttachments([item.id])
-    ).filter((a) => a.id !== item.id);
-
-    const result = persist([{ token: item, attachments }]);
-
-    if (result.saved > 0) {
-        void OBR.notification.show(
-            `已存档：「${item.name || "未命名物件"}」`,
-            "SUCCESS",
-        );
-    } else {
-        void OBR.notification.show(
-            `存档失败：${result.skipped[0]?.reason ?? "未知原因"}`,
-            "ERROR",
-        );
-    }
-}
-
 function el<K extends keyof HTMLElementTagNameMap>(
     tag: K,
     className?: string,
     text?: string,
 ): HTMLElementTagNameMap[K] {
     const node = document.createElement(tag);
-    if (className) {
-        node.className = className;
-    }
-    if (text !== undefined) {
-        node.textContent = text;
-    }
+    if (className) node.className = className;
+    if (text !== undefined) node.textContent = text;
     return node;
 }
 
+/* ------------------------------------------------------------------ */
+/* 回合数缓存                                                          */
+/* ------------------------------------------------------------------ */
+
+let lastRound: number | null | undefined = undefined;
+let roundPromise: Promise<number | null> | null = null;
+
+function loadRound(): Promise<number | null> {
+    roundPromise ??= (async () => {
+        try {
+            return readCombatRound(await OBR.scene.getMetadata());
+        } catch {
+            return null;
+        }
+    })();
+    return roundPromise;
+}
+
+/** 供 action.ts 在回合变化时强制重算 */
+export function invalidateRoundCache(): void {
+    lastRound = undefined;
+    roundPromise = null;
+}
+
+/* ------------------------------------------------------------------ */
+/* 套用                                                                */
+/* ------------------------------------------------------------------ */
+
+/** GM 的「从素材库套用」按钮组 */
+async function buildArchivePicker(
+    itemIds: readonly string[],
+): Promise<HTMLDivElement> {
+    const box = el("div", "lib-picker");
+    const entries = await listAll();
+
+    if (entries.length === 0) {
+        box.appendChild(el("div", "hint", "素材库是空的，先到「素材库」页新建。"));
+        return box;
+    }
+
+    const sel = document.createElement("select");
+    sel.className = "lib-select";
+    for (const e of entries) {
+        const o = document.createElement("option");
+        o.value = e.id;
+        const rounds = e.rounds > 0 ? ` · ${e.rounds}轮` : " · 不限";
+        const img = e.imageUrl ? " · 含图标" : "";
+        const scope = e.scope === "scene" ? " · 房间" : "";
+        o.textContent = `${e.name || "（未命名）"}${rounds}${img}${scope}`;
+        sel.appendChild(o);
+    }
+
+    const apply = el("button", "btn primary", "套用");
+    apply.addEventListener("click", () => {
+        void (async () => {
+            const entry: ArchiveEntry | undefined = await findById(sel.value);
+            if (!entry) {
+                void OBR.notification.show("素材库中已无此条目", "ERROR");
+                return;
+            }
+            const r = await applyEntry(entry, itemIds);
+            const done = r.created + r.reused + r.written;
+            void OBR.notification.show(
+                r.failed > 0
+                    ? `已套用 ${done}/${itemIds.length} 个（${r.failed} 个失败）`
+                    : `已套用到 ${done} 个目标`,
+                r.failed > 0 ? "WARNING" : "SUCCESS",
+            );
+        })();
+    });
+
+    box.appendChild(sel);
+    box.appendChild(apply);
+    return box;
+}
+
+/* ------------------------------------------------------------------ */
+/* 主渲染                                                              */
+/* ------------------------------------------------------------------ */
+
 export function renderPeekPanel(ctx: PeekPanelCtx): void {
+    void loadRound().then((round) => {
+        if (lastRound === round) return;
+        lastRound = round;
+        renderCards(ctx, round);
+    });
+    renderCards(ctx, lastRound ?? null);
+}
+
+function renderCards(ctx: PeekPanelCtx, round: number | null): void {
     const { role, selected, panel, footerCount } = ctx;
 
     panel.innerHTML = "";
-
     footerCount.textContent =
         selected.length === 0 ? "未选中" : `已选 ${selected.length} 项`;
 
     if (selected.length === 0) {
         const tip = el("div", "hint");
         tip.innerHTML =
-            "<b>点击画布上的物件</b><br/>即可在此查看它的描述。<br/><br/>" +
-            (role === "GM"
-                ? "右键物件 →「附件描述」<br/>可编写规则文本。<br/>选中物件后点卡片上的「存档」<br/>即可跨场景复用。"
-                : "带描述的物件由主持人配置。");
+            "<b>点击画布上的状态标记</b><br/>" +
+            "即可在此查看、编辑它的状态。<br/><br/>" +
+            "玩家端：切到工具栏的<b>「查看状态描述」</b>模式，<br/>" +
+            "鼠标移到标记上就会弹出说明。<br/><br/>" +
+            (role === "GM" ? "GM：选中标记后点「编辑」即可填写规则文本。" : "");
         panel.appendChild(tip);
         return;
     }
 
     for (const item of selected) {
-        const peek = readPeek(item.metadata);
-        const card = el("div", "card");
+        panel.appendChild(buildItemCard(item, role, round));
+    }
 
-        // --- 头部 ---
-        const head = el("div", "card-head");
-        const swatch = el("span", "swatch");
-        const name = el("span", "item-name", item.name || "（未命名物件）");
-        head.appendChild(swatch);
-        head.appendChild(name);
+    // --- GM：从素材库批量套用 ---
+    if (role === "GM" && selected.length > 0) {
+        const ids = selected.map((i) => i.id);
+        const pickerSlot = el("div", "lib-picker-slot");
+        let built = false;
 
-        if (role === "GM") {
-            // 持久化快捷按钮
-            const url = (item as { image?: { url?: string } }).image?.url;
-            const persisted =
-                typeof url === "string" ? findByKey(url) : undefined;
-
-            const saveBtn = el(
-                "button",
-                `btn ${persisted ? "danger" : "primary"}`,
-                persisted ? "取消存档" : "存档",
-            );
-            saveBtn.title = persisted
-                ? `取消存档「${persistedTokenGetName(persisted)}」`
-                : "保存为唯一存档：之后从素材库拖出同一张图片会自动带上描述，在场景中的改动也会自动回写";
-            saveBtn.addEventListener("click", () => {
-                if (persisted) {
-                    const ok = window.confirm(
-                        `取消持久化「${persistedTokenGetName(persisted)}」？\n\n该物件将不再作为模板保存。`,
-                    );
-                    if (ok) {
-                        removeToken(persistedTokenKey(persisted));
-                        void OBR.notification.show("已取消持久化", "SUCCESS");
-                    }
-                } else {
-                    void quickPersist(item);
-                }
+        const toggle = el("button", "btn", "从素材库套用…");
+        toggle.addEventListener("click", () => {
+            if (built) {
+                pickerSlot.innerHTML = "";
+                built = false;
+                toggle.textContent = "从素材库套用…";
+                return;
+            }
+            built = true;
+            toggle.textContent = "收起";
+            void buildArchivePicker(ids).then((box) => {
+                pickerSlot.innerHTML = "";
+                pickerSlot.appendChild(box);
             });
-            head.appendChild(saveBtn);
+        });
 
-            // 编辑按钮
-            const editBtn = el("button", "btn", peek.has ? "编辑" : "设置");
-            editBtn.title = "编辑描述文本";
-            editBtn.addEventListener("click", () => openEdit([item.id]));
-            head.appendChild(editBtn);
-        }
-
-        card.appendChild(head);
-
-        // --- 描述正文 ---
-        const text = el("div", `item-text${peek.has ? "" : " no-desc"}`);
-        text.textContent = peek.has ? peek.text : "（暂无描述）";
-        card.appendChild(text);
-
-        panel.appendChild(card);
+        panel.appendChild(toggle);
+        panel.appendChild(pickerSlot);
     }
 }
 
-/** 当前已保存的模板数量（供面板底部展示） */
-export function templateCount(): number {
-    return getTokens().length;
+function buildItemCard(
+    item: Item,
+    role: "GM" | "PLAYER",
+    round: number | null,
+): HTMLElement {
+    const peek = readPeek(item.metadata);
+    const card = el("div", `card${peek.expired ? " card-expired" : ""}`);
+
+    const head = el("div", "card-head");
+    const swatch = el("span", "swatch");
+    if (/^#[0-9a-f]{6}$/i.test(peek.color)) {
+        swatch.style.background = peek.color;
+    }
+    head.appendChild(swatch);
+    head.appendChild(el("span", "item-name", peek.name || item.name || "（未命名标记）"));
+
+    if (role === "GM") {
+        if (peek.expired) {
+            const reviveBtn = el("button", "btn primary", "续期");
+            reviveBtn.title = "清除「已结束」标记，并把施加回合重置为当前回合重新计数";
+            reviveBtn.addEventListener("click", () => {
+                void reviveExpired([item.id]).then(() => {
+                    void OBR.notification.show("已续期", "SUCCESS");
+                });
+            });
+            head.appendChild(reviveBtn);
+        }
+
+        // 存为素材：这就是旧版独立的「存档」按钮，现在并入素材库模型
+        const saveBtn = el("button", "btn", "存为素材");
+        saveBtn.title =
+            "把这个标记存进素材库（名字、规则文本、轮数、配色、图片与子物件位置），" +
+            "以后可以一键套用到别的目标上";
+        saveBtn.addEventListener("click", () => {
+            void (async () => {
+                try {
+                    const attachments = (
+                        await OBR.scene.items.getItemAttachments([item.id])
+                    ).filter((a) => a.id !== item.id);
+                    const e = await captureFromItem(item, "local", attachments);
+                    if (!e) {
+                        void OBR.notification.show("该物件没有图片地址，无法存为素材", "WARNING");
+                        return;
+                    }
+                    void OBR.notification.show(
+                        `已存入素材库：${e.name || "未命名"}`,
+                        "SUCCESS",
+                    );
+                } catch (err) {
+                    void OBR.notification.show(
+                        `存入失败：${err instanceof Error ? err.message : String(err)}`,
+                        "ERROR",
+                    );
+                }
+            })();
+        });
+        head.appendChild(saveBtn);
+
+        const editBtn = el("button", "btn", peek.has ? "编辑" : "设置");
+        editBtn.title = "编辑状态名、规则文本与持续轮数";
+        editBtn.addEventListener("click", () => openEdit([item.id]));
+        head.appendChild(editBtn);
+    }
+
+    card.appendChild(head);
+
+    const text = el("div", `item-text${peek.has ? "" : " no-desc"}`);
+    text.textContent = peek.has ? peek.descPlain : "（暂无状态描述）";
+    card.appendChild(text);
+
+    if (peek.has && (peek.rounds > 0 || peek.expired)) {
+        const foot = el("div", "item-foot");
+        if (peek.expired) {
+            foot.appendChild(el("span", "pill expired-pill", "已结束"));
+        } else {
+            const left = remainingRounds(peek.rounds, peek.appliedRound, round);
+            foot.appendChild(
+                el(
+                    "span",
+                    `pill${left === null ? " muted" : ""}`,
+                    left === null
+                        ? `持续 ${peek.rounds} 轮`
+                        : `剩 ${left} / ${peek.rounds} 轮`,
+                ),
+            );
+        }
+        card.appendChild(foot);
+    }
+
+    return card;
 }

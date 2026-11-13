@@ -1,14 +1,22 @@
 /**
- * action 面板入口 —— 两个 tab：[附件描述] [保存模板]
+ * action 面板入口 —— 两个 tab：[状态] [素材库]
+ *
+ * 旧版是三个（状态 / 状态库 / 图片存档）。后两个已合并为「素材库」：
+ * 状态预设与图片存档本来就是同一件事的两面，拆开只会让同一个状态
+ * 要在两处维护、套用和复用分成两步。
  */
 
 import OBR, { type Item } from "@owlbear-rodeo/sdk";
-import { load, subscribe } from "./persist/store";
-import { applyTheme, injectStyle } from "./ui/style";
-import { renderPeekPanel, type PeekPanelCtx } from "./ui/panel-peek";
-import { renderTemplatePanel } from "./ui/panel-templates";
+import { injectStyle } from "./ui/style";
+import { watchTheme } from "./ui/theme";
+import {
+    renderPeekPanel,
+    invalidateRoundCache,
+    type PeekPanelCtx,
+} from "./ui/panel-peek";
+import { renderArchivePanel } from "./ui/panel-archive";
 
-type TabId = "peek" | "templates";
+type TabId = "peek" | "archive";
 
 let role: "GM" | "PLAYER" = "PLAYER";
 let selectionIds: string[] = [];
@@ -34,7 +42,8 @@ async function refresh(): Promise<void> {
     if (activeTab === "peek") {
         renderPeekPanel(currentCtx(targets));
     } else {
-        renderTemplatePanel(panel, countEl, targets);
+        // 玩家进素材库是只读的：能看、能套用 GM 发布的房间预设
+        await renderArchivePanel(panel, countEl, role !== "GM");
     }
 }
 
@@ -69,30 +78,17 @@ OBR.onReady(async () => {
     injectStyle();
     initTabs();
 
+    // 主题跟随宿主：先应用一次，之后宿主切主题自动跟随
+    void watchTheme();
+
     role = await OBR.player.getRole();
     const cur = await OBR.player.getSelection();
     if (Array.isArray(cur)) {
         selectionIds = cur;
     }
 
-    load();
-    // 玩家无需看到模板 tab
-    if (role !== "GM") {
-        const t = document.querySelector<HTMLElement>('[data-tab="templates"]');
-        if (t) {
-            t.style.display = "none";
-        }
-    }
-
     updateModeBtn();
     await refresh();
-
-    // 存储变化 → 重绘当前面板。
-    // 不能只在 templates 页刷新：在「附件描述」页点存档后，
-    // 卡片按钮要立刻从「存档」翻成「取消存档」，否则用户会以为没存上。
-    subscribe(() => {
-        void refresh();
-    });
 
     OBR.player.onChange((player) => {
         const changed =
@@ -110,9 +106,11 @@ OBR.onReady(async () => {
         void refresh();
     });
 
-    OBR.theme.onChange((theme) => applyTheme(theme.mode));
-    const theme = await OBR.theme.getTheme();
-    applyTheme(theme.mode);
+    // 回合推进 → 剩余轮数会变，清缓存重算
+    OBR.scene.onMetadataChange(() => {
+        invalidateRoundCache();
+        void refresh();
+    });
 });
 
 /** 供 ui 模块调用：编辑后触发重绘 */

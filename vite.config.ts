@@ -99,6 +99,7 @@ export default defineConfig(({ mode }) => {
                     background: resolve(__dirname, "background.html"),
                     action: resolve(__dirname, "action.html"),
                     edit: resolve(__dirname, "edit.html"),
+                    peek: resolve(__dirname, "peek.html"),
                 },
             },
         },

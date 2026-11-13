@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>状态描述 — 编辑</title>
+    <script type="module" crossorigin src="https://env-00jy6try6vgy-static.normal.cloudstatic.cn/status-peek/assets/edit-DwYBMugN.js"></script>
+    <link rel="modulepreload" crossorigin href="https://env-00jy6try6vgy-static.normal.cloudstatic.cn/status-peek/assets/shared-CptAFzUO.js">
+    <link rel="modulepreload" crossorigin href="https://env-00jy6try6vgy-static.normal.cloudstatic.cn/status-peek/assets/rounds-CpkND_0m.js">
+    <link rel="modulepreload" crossorigin href="https://env-00jy6try6vgy-static.normal.cloudstatic.cn/status-peek/assets/style-BpLZ63lk.js">
+    <link rel="modulepreload" crossorigin href="https://env-00jy6try6vgy-static.normal.cloudstatic.cn/status-peek/assets/theme-CKxIsrFJ.js">
+  </head>
+  <body>
+    <div class="modal-wrap">
+      <div class="modal-title" id="target">（未选择物件）</div>
+      <div class="modal-sub" id="sub"></div>
+
+      <div class="modal-label">
+        <span>状态名</span>
+        <span id="name-counter">0 / 80</span>
+      </div>
+      <input id="name" type="text" placeholder="例如：魅惑 Charmed" maxlength="80" />
+
+      <div class="modal-label">
+        <span>规则文本</span>
+        <span id="counter">0 / 4000</span>
+      </div>
+      <textarea
+        id="text"
+        placeholder="被魅惑生物不能攻击魅惑者，其造成伤害的能力或魔法效应也不能以魅惑者为目标。&#10;魅惑者对被魅惑生物进行任何与社交相关的属性检定时具有优势。"
+      ></textarea>
+
+      <div class="modal-label">
+        <span>持续轮数</span>
+        <span class="hint-inline">0 = 不限</span>
+      </div>
+      <input id="rounds" type="number" min="0" step="1" value="0" />
+
+      <div class="modal-label">
+        <span>状态色</span>
+      </div>
+      <div class="color-row">
+        <input id="color" type="color" value="#ff00d0" />
+        <div class="presets" id="presets"></div>
+      </div>
+
+      <div class="modal-status" id="status"></div>
+
+      <div class="modal-actions">
+        <button class="btn danger" id="clear">清除状态</button>
+        <button class="btn" id="cancel">取消</button>
+        <button class="btn primary" id="save">保存</button>
+      </div>
+    </div>
+  </body>
+</html>

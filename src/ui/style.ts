@@ -1,8 +1,16 @@
 /**
  * 统一设计语言
  *
- * 完全沿用 Status Peek 的视觉风格（系统字体、朴素边框卡片、body.dark 切换），
- * 为新增的 tab 栏、按钮、输入框等元素补充同风格样式。
+ * 所有颜色一律走 `var(--spp-*)`，由 ui/theme.ts 从 Owlbear 宿主主题注入。
+ * 这样明暗与主题色都由宿主决定，本扩展只是跟随，不再自带一套配色。
+ *
+ * 变量含义：
+ *   --spp-bg页面底色（宿主 background.default）
+ *   --spp-surface卡片 / 输入框（宿主 background.paper）
+ *   --spp-text / --spp-text-2 / --spp-text-3三级文字
+ *   --spp-accent主色，--spp-on-accent主色上的文字
+ *   --spp-line / --spp-line-2 两级描边
+ *   --spp-wash / --spp-wash-2 主色淡底
  */
 
 export const STYLE_ID = "spp-style";
@@ -16,61 +24,86 @@ export const CSS = `
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    background: #fff;
-    color: #333;
+    background: var(--spp-bg);
+    color: var(--spp-text);
   }
 
   /* ---------- tab 栏 ---------- */
   #tabs {
-    flex: none; display: flex; border-bottom: 1px solid #e4e7ec;
+    flex: none; display: flex; border-bottom: 1px solid var(--spp-line);
   }
   #tabs .tab {
     flex: 1; padding: 9px 0; text-align: center; cursor: pointer;
-    font-size: 13px; color: #8a94a6; border-bottom: 2px solid transparent;
+    font-size: 13px; color: var(--spp-text-2);
+    border-bottom: 2px solid transparent;
     user-select: none;
   }
-  #tabs .tab:hover { color: #555; }
+  #tabs .tab:hover { color: var(--spp-text); }
   #tabs .tab.active {
-    color: #2c5f7c; border-bottom-color: #2c5f7c; font-weight: 600;
+    color: var(--spp-accent); border-bottom-color: var(--spp-accent);
+    font-weight: 600;
   }
 
   /* ---------- 面板 ---------- */
   #panel { flex: 1; overflow-y: auto; padding: 12px; }
-  .hint { color: #888; text-align: center; padding: 32px 16px; line-height: 1.8; }
-  .hint b { color: #555; }
+  .hint { color: var(--spp-text-2); text-align: center; padding: 32px 16px; line-height: 1.8; }
+  .hint b { color: var(--spp-text); }
 
   /* ---------- 卡片 ---------- */
   .card {
-    border: 1px solid #d8dce2; border-radius: 8px;
-    padding: 10px 12px; margin-bottom: 10px; background: #fff;
+    border: 1px solid var(--spp-line); border-radius: 8px;
+    padding: 10px 12px; margin-bottom: 10px;
+    background: var(--spp-surface);
   }
   .card-head {
     display: flex; align-items: center; gap: 8px; margin-bottom: 6px;
   }
   .swatch {
     width: 10px; height: 10px; border-radius: 3px; flex: none;
-    background: #2c5f7c;
+    background: var(--spp-accent);
   }
   .item-name {
     font-weight: 600; flex: 1; min-width: 0;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
   .item-text { white-space: pre-wrap; word-break: break-word; line-height: 1.65; }
-  .no-desc { color: #999; font-style: italic; }
+  .no-desc { color: var(--spp-text-3); font-style: italic; }
+
+  /* ---------- 卡片上的轮数徽章 ---------- */
+  .item-foot { margin-top: 8px; }
+  .pill {
+    display: inline-block; font-size: 11.5px; line-height: 1;
+    padding: 5px 9px; border-radius: 999px;
+    background: var(--spp-wash-2); color: var(--spp-text);
+  }
+  .pill.muted { background: var(--spp-wash-2); color: var(--spp-text-3); }
+  .pill.expired-pill {
+    background: var(--spp-wash-2); color: var(--spp-text-3); text-decoration: line-through;
+  }
+  .card-expired { opacity: 0.7; }
 
   /* ---------- 小按钮 ---------- */
   .btn {
-    flex: none; border: 1px solid #c5ccd6; background: #f2f4f7; color: #333;
+    flex: none; border: 1px solid var(--spp-line-2);
+    background: var(--spp-surface); color: var(--spp-text);
     border-radius: 5px; font-size: 12px; padding: 2px 8px; cursor: pointer;
     font-family: inherit;
   }
-  .btn:hover { background: #e3e7ee; }
-  .btn.primary { border-color: #9dbdd4; background: #eef4f9; color: #2c5f7c; }
-  .btn.primary:hover { background: #e0ecf5; }
-  .btn.danger { border-color: #e2b5b5; background: #fdf2f2; color: #a85050; }
+  .btn:hover { background: var(--spp-wash-2); }
+  .btn.primary {
+    border-color: var(--spp-accent);
+    background: var(--spp-wash);
+    color: var(--spp-accent);
+  }
+  .btn.primary:hover { background: var(--spp-wash-hover); }
+  .btn.danger { border-color: #a85050; background: #fdf2f2; color: #a85050; }
   .btn.danger:hover { background: #fae8e8; }
   .btn:disabled { opacity: .45; cursor: default; }
-  .btn:disabled:hover { background: #f2f4f7; }
+  .btn:disabled:hover { background: var(--spp-surface); }
+
+  /* 危险按钮在深色下用深底浅字 */
+  body.dark .btn.danger { background: #3a2727; border-color: #5e3d3d; color: #d99b9b; }
+  body.dark .btn.danger:hover { background: #452e2e; }
 
   /* ---------- 模板卡片 ---------- */
   .tpl-head {
@@ -78,70 +111,77 @@ export const CSS = `
   }
   .tpl-thumb {
     width: 36px; height: 36px; flex: none; border-radius: 6px;
-    object-fit: contain; background: #f7f9fc; border: 1px solid #e4e7ec;
+    object-fit: contain; background: var(--spp-wash-2);
+    border: 1px solid var(--spp-line);
   }
   .tpl-meta { flex: 1; min-width: 0; }
   .tpl-name {
     font-weight: 600; font-size: 13px;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
-  .tpl-sub { font-size: 11px; color: #99a0ac; margin-top: 2px; }
+  .tpl-sub { font-size: 11px; color: var(--spp-text-3); margin-top: 2px; }
   .tpl-actions { display: flex; gap: 4px; flex: none; }
   .tpl-body {
     display: none; margin-top: 10px; padding-top: 10px;
-    border-top: 1px solid #eef1f4;
+    border-top: 1px solid var(--spp-line);
   }
   .tpl-body.open { display: block; }
   .tpl-row {
     display: flex; align-items: center; gap: 6px; margin-bottom: 8px;
     flex-wrap: wrap;
   }
-  .tpl-label { font-size: 11.5px; color: #8a94a6; margin-right: 4px; }
+  .tpl-label { font-size: 11.5px; color: var(--spp-text-2); margin-right: 4px; }
   .tpl-toggle {
-    border: 1px solid #c5ccd6; background: #f7f9fc; color: #5a6272;
+    border: 1px solid var(--spp-line-2);
+    background: var(--spp-surface); color: var(--spp-text-2);
     border-radius: 5px; font-size: 11.5px; padding: 3px 9px; cursor: pointer;
     font-family: inherit;
   }
   .tpl-toggle.on {
-    border-color: #9dbdd4; background: #eef4f9; color: #2c5f7c; font-weight: 600;
+    border-color: var(--spp-accent);
+    background: var(--spp-wash);
+    color: var(--spp-accent); font-weight: 600;
   }
-  .tpl-note { font-size: 11px; color: #99a0ac; line-height: 1.6; }
+  .tpl-note { font-size: 11px; color: var(--spp-text-3); line-height: 1.6; }
   .tpl-warn {
     font-size: 11px; color: #a85050; background: #fdf2f2;
     border: 1px solid #f0dada; border-radius: 5px;
     padding: 5px 8px; margin-bottom: 8px; line-height: 1.6;
   }
+  body.dark .tpl-warn { background: #3a2727; border-color: #5e3d3d; color: #d99b9b; }
 
   /* ---------- 顶部工具条 ---------- */
   #toolbar {
     display: flex; align-items: center; gap: 6px;
-    padding: 8px 12px; border-bottom: 1px solid #eef1f4; flex: none;
+    padding: 8px 12px; border-bottom: 1px solid var(--spp-line); flex: none;
   }
   #search {
-    flex: 1; min-width: 0; border: 1px solid #d8dce2; border-radius: 6px;
-    padding: 5px 8px; font-size: 12.5px; font-family: inherit;
-    background: #fbfcfd; color: #333;
+    flex: 1; min-width: 0; border: 1px solid var(--spp-line);
+    border-radius: 6px; padding: 5px 8px;
+    font-size: 12.5px; font-family: inherit;
+    background: var(--spp-surface); color: var(--spp-text);
   }
-  #search:focus { outline: none; border-color: #9dbdd4; }
-  #usage { font-size: 11px; color: #99a0ac; flex: none; }
+  #search:focus { outline: none; border-color: var(--spp-accent); }
+  #usage { font-size: 11px; color: var(--spp-text-3); flex: none; }
 
   /* ---------- 底部 ---------- */
   #footer {
-    flex: none; border-top: 1px solid #e4e7ec; padding: 8px 12px;
-    color: #999; font-size: 12px; display: flex; justify-content: space-between;
+    flex: none; border-top: 1px solid var(--spp-line); padding: 8px 12px;
+    color: var(--spp-text-3); font-size: 12px;
+    display: flex; justify-content: space-between;
   }
   #footer .mode { cursor: pointer; }
 
   /* ---------- 设置抽屉 ---------- */
   #settings {
-    position: absolute; inset: 0; background: #fff;
+    position: absolute; inset: 0; background: var(--spp-bg);
     transform: translateX(-100%); transition: transform .2s ease-in-out;
     display: flex; flex-direction: column;
   }
   #settings.open { transform: translateX(0); }
   .set-head {
     display: flex; align-items: center; gap: 8px;
-    padding: 12px; border-bottom: 1px solid #eef1f4;
+    padding: 12px; border-bottom: 1px solid var(--spp-line);
   }
   .set-title { font-size: 14px; font-weight: 700; flex: 1; }
   .set-body { padding: 12px; overflow-y: auto; }
@@ -149,88 +189,134 @@ export const CSS = `
     display: flex; align-items: center; justify-content: space-between;
     padding: 8px 0;
   }
-  .set-item + .set-item { border-top: 1px solid #f2f4f7; }
-  .set-desc { font-size: 11px; color: #99a0ac; margin-top: 3px; line-height: 1.5; }
+  .set-item + .set-item { border-top: 1px solid var(--spp-line); }
+  .set-desc { font-size: 11px; color: var(--spp-text-3); margin-top: 3px; line-height: 1.5; }
 
   /* ---------- 编辑模态框 ---------- */
   .modal-wrap {
     display: flex; flex-direction: column; height: 100%; padding: 14px;
-    background: #fff;
+    background: var(--spp-bg); color: var(--spp-text);
   }
   .modal-title {
     font-size: 14px; font-weight: 700; margin-bottom: 4px;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
-  .modal-sub { font-size: 11.5px; color: #8a94a6; margin-bottom: 10px; }
+  .modal-sub { font-size: 11.5px; color: var(--spp-text-2); margin-bottom: 10px; }
   .modal-label {
-    font-size: 11.5px; color: #8a94a6; margin-bottom: 5px;
+    font-size: 11.5px; color: var(--spp-text-2); margin-bottom: 5px;
     display: flex; justify-content: space-between;
   }
   #text {
     flex: 1; min-height: 120px; resize: none;
-    border: 1px solid #d8dce2; border-radius: 6px; padding: 9px 10px;
+    border: 1px solid var(--spp-line); border-radius: 6px; padding: 9px 10px;
     font-family: inherit; font-size: 13px; line-height: 1.6;
-    background: #fbfcfd; color: #333;
+    background: var(--spp-surface); color: var(--spp-text);
   }
-  #text:focus { outline: none; border-color: #9dbdd4; background: #fff; }
+  #text:focus { outline: none; border-color: var(--spp-accent); }
   .modal-persist {
-    margin-top: 12px; padding-top: 12px; border-top: 1px solid #eef1f4;
+    margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--spp-line);
   }
   .modal-persist-row { display: flex; gap: 6px; align-items: center; }
-  .modal-status {
-    font-size: 11.5px; color: #8a94a6; margin-top: 7px;
+  .modal-status { font-size: 11.5px; color: var(--spp-text-2); margin-top: 7px; }
+  .modal-status.on { color: var(--spp-accent); font-weight: 600; }
+
+  /* ---------- 编辑表单新增控件 ---------- */
+  .hint-inline { color: var(--spp-text-3); font-style: italic; }
+  #name, #rounds {
+    width: 100%; border: 1px solid var(--spp-line); border-radius: 6px;
+    padding: 8px 10px; font-family: inherit; font-size: 13px;
+    background: var(--spp-surface); color: var(--spp-text);
+    margin-bottom: 12px;
   }
-  .modal-status.on { color: #2c5f7c; font-weight: 600; }
+  #name:focus, #rounds:focus { outline: none; border-color: var(--spp-accent); }
+  .color-row { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+  #color {
+    width: 38px; height: 28px; padding: 0;
+    border: 1px solid var(--spp-line);
+    border-radius: 6px; background: none; cursor: pointer; flex: none;
+  }
+  .presets { display: flex; flex-wrap: wrap; gap: 5px; }
+  .presets .swatch {
+    width: 20px; height: 20px; border-radius: 5px; cursor: pointer;
+    border: 1px solid rgba(128,128,128,0.35); padding: 0;
+  }
+  .presets .swatch:hover { transform: scale(1.12); }
+
+  /* ---------- 状态库 ---------- */
+  .lib-add { width: 100%; margin: 4px 0 8px; }
+  .lib-io { display: flex; gap: 8px; margin-bottom: 12px; }
+  .lib-io .btn { flex: 1; }
+
+  /* ---------- 素材库筛选 / 搜索 ---------- */
+  .lib-filter { margin-bottom: 12px; }
+  .lib-search {
+    width: 100%; border: 1px solid var(--spp-line); border-radius: 6px;
+    padding: 6px 9px; font-size: 12.5px; font-family: inherit;
+    background: var(--spp-surface); color: var(--spp-text);
+    margin-bottom: 8px;
+  }
+  .lib-search:focus { outline: none; border-color: var(--spp-accent); }
+  .lib-chips { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
+  .lib-filter .chip {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 26px; height: 26px; padding: 0 10px;
+    border: 1px solid var(--spp-line-2); border-radius: 999px;
+    background: var(--spp-surface); color: var(--spp-text-2);
+    font-size: 11.5px; cursor: pointer; font-family: inherit;
+  }
+  .lib-filter .chip:hover { background: var(--spp-wash-2); }
+  .lib-filter .chip.on {
+    border-color: var(--spp-accent); background: var(--spp-wash);
+    color: var(--spp-accent); font-weight: 600;
+  }
+  .lib-filter .chip .dot {
+    width: 14px; height: 14px; border-radius: 5px; flex: none;
+    border: 1px solid rgba(128,128,128,0.35);
+  }
+  .lib-filter-count { font-size: 11px; color: var(--spp-text-3); margin-top: 7px; }
+  .lib-editor {
+    border: 1px solid var(--spp-line); border-radius: 8px; padding: 10px;
+    margin-bottom: 10px; background: var(--spp-surface);
+  }
+  .lib-editor input[type="text"], .lib-editor textarea, .lib-editor input[type="number"] {
+    width: 100%; border: 1px solid var(--spp-line); border-radius: 6px;
+    padding: 8px 10px; font-family: inherit; font-size: 13px;
+    background: var(--spp-bg); color: var(--spp-text); margin-bottom: 8px;
+  }
+  .lib-editor textarea { min-height: 90px; resize: vertical; line-height: 1.6; }
+  .lib-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .lib-row input[type="number"] { width: 70px; margin-bottom: 0; }
+  .lib-row input[type="color"] {
+    width: 34px; height: 28px; padding: 0;
+    border: 1px solid var(--spp-line);
+    border-radius: 6px; background: none; cursor: pointer;
+  }
+  .lib-hint { font-size: 11.5px; color: var(--spp-text-3); flex: 1; }
+  .lib-actions { display: flex; justify-content: flex-end; gap: 8px; }
+  .lib-picker { display: flex; gap: 8px; margin: 8px 0 4px; align-items: center; }
+  .lib-select {
+    flex: 1; min-width: 0; border: 1px solid var(--spp-line); border-radius: 6px;
+    padding: 7px 9px; font-family: inherit; font-size: 13px;
+    background: var(--spp-surface); color: var(--spp-text);
+  }
+  .lib-picker-slot:empty { display: none; }
   .modal-actions {
     display: flex; justify-content: flex-end; gap: 8px;
-    margin-top: 12px; padding-top: 12px; border-top: 1px solid #eef1f4;
+    margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--spp-line);
   }
 
-  /* ---------- 深色模式（沿用 Status Peek 的 body.dark 覆盖法） ---------- */
-  body.dark { background: #1c1f26; color: #d7dae0; }
-  body.dark #tabs { border-bottom-color: #3a4150; }
-  body.dark #tabs .tab { color: #7d8794; }
-  body.dark #tabs .tab:hover { color: #b8bfc9; }
-  body.dark #tabs .tab.active { color: #7fb3d5; border-bottom-color: #7fb3d5; }
-  body.dark .hint { color: #777; }
-  body.dark .hint b { color: #aaa; }
-  body.dark .card { border-color: #3a4150; background: #23262e; }
-  body.dark .item-text { color: #d7dae0; }
-  body.dark .item-name { color: #f0f2f5; }
-  body.dark .no-desc { color: #666; }
-  body.dark .btn { background: #2e323c; border-color: #454b58; color: #ccd0d8; }
-  body.dark .btn:hover { background: #383d48; }
-  body.dark .btn.primary { background: #24323d; border-color: #3d5a6e; color: #8fc3e0; }
-  body.dark .btn.primary:hover { background: #2b3c49; }
-  body.dark .btn.danger { background: #3a2727; border-color: #5e3d3d; color: #d99b9b; }
-  body.dark .btn.danger:hover { background: #452e2e; }
-  body.dark .btn:disabled { background: #262a32; }
-  body.dark .tpl-thumb { background: #2a2e37; border-color: #3a4150; }
-  body.dark .tpl-sub { color: #6f7885; }
-  body.dark .tpl-body { border-top-color: #2f3540; }
-  body.dark .tpl-label { color: #7d8794; }
-  body.dark .tpl-toggle { background: #262a32; border-color: #454b58; color: #a8b0bb; }
-  body.dark .tpl-toggle.on { background: #24323d; border-color: #3d5a6e; color: #8fc3e0; }
-  body.dark .tpl-note { color: #6f7885; }
-  body.dark .tpl-warn { background: #3a2727; border-color: #5e3d3d; color: #d99b9b; }
-  body.dark #toolbar { border-bottom-color: #2f3540; }
-  body.dark #search { background: #262a32; border-color: #454b58; color: #d7dae0; }
-  body.dark #search:focus { border-color: #3d5a6e; background: #2a2e37; }
-  body.dark #usage { color: #6f7885; }
-  body.dark #footer { border-top-color: #3a4150; color: #777; }
-  body.dark #settings { background: #1c1f26; }
-  body.dark .set-head { border-bottom-color: #2f3540; }
-  body.dark .set-item + .set-item { border-top-color: #2a2e37; }
-  body.dark .set-desc { color: #6f7885; }
-  body.dark .modal-wrap { background: #1c1f26; }
-  body.dark .modal-sub { color: #7d8794; }
-  body.dark .modal-label { color: #7d8794; }
-  body.dark #text { background: #262a32; border-color: #454b58; color: #d7dae0; }
-  body.dark #text:focus { border-color: #3d5a6e; background: #2a2e37; }
-  body.dark .modal-persist { border-top-color: #2f3540; }
-  body.dark .modal-status { color: #7d8794; }
-  body.dark .modal-status.on { color: #8fc3e0; }
-  body.dark .modal-actions { border-top-color: #2f3540; }
+  /* ---------- 绑定图片（状态库与存档的合并点） ---------- */
+  .lib-thumb {
+    width: 40px; height: 40px; flex: none; border-radius: 8px;
+    object-fit: contain; background: var(--spp-wash-2);
+    border: 1px solid var(--spp-line); cursor: pointer;
+  }
+  .lib-thumb.empty {
+    display: flex; align-items: center; justify-content: center;
+    color: var(--spp-text-3); font-size: 18px;
+  }
+  .lib-bind { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .lib-bind .lib-thumb { width: 48px; height: 48px; }
 `;
 
 /** 把样式表注入文档（幂等） */
@@ -244,7 +330,4 @@ export function injectStyle(): void {
     document.head.appendChild(el);
 }
 
-/** 根据 OBR 主题切换 body.dark */
-export function applyTheme(mode: string): void {
-    document.body.classList.toggle("dark", mode === "dark");
-}
+export { applyTheme } from "./theme";

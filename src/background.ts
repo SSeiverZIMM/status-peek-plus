@@ -1,15 +1,17 @@
 /**
  * 后台入口
  *
- * 合并了两个插件的右键菜单：
- *  - Status Peek：「附件描述」（打开统一编辑面板）
- *  - Persistent Tokens 的持久化操作已移入 action 面板卡片按钮，不再占用右键
+ * 职责：
+ *  - 注册 hover 工具模式（GM 与玩家都要，用于在光标处看状态描述）
+ *  - GM 专属：右键菜单（可选快捷入口）+ 持久化自动同步
+ *  - 全员：监听先攻回合变化，把到期的状态标记为「已结束」
  */
 
 import OBR, { type ContextMenuContext, type Item } from "@owlbear-rodeo/sdk";
-import { MODAL_EDIT_ID, isTargetLayer, selfBaseUrl, siblingUrl } from "./shared";
-import { load, syncUniqueTokens } from "./persist/store";
-import { applyPersisted } from "./persist/apply";
+import { MODAL_EDIT_ID, isTargetLayer, selfBaseUrl, siblingUrl, readCombatRound } from "./shared";
+import { installHoverMode, closePopoverIfOpen, listenForResize } from "./ui/tool-hover";
+import { watchRounds, backfillAppliedRound } from "./rounds";
+import { applyToNewItems } from "./apply";
 
 /**
  * 右键菜单 ID
@@ -66,7 +68,7 @@ async function installContextMenus(): Promise<void> {
         icons: [
             {
                 icon: contextMenuIcon(),
-                label: "附件描述",
+                label: "编辑状态",
                 filter: {
                     roles: ["GM"],
                     min: 1,
@@ -75,7 +77,7 @@ async function installContextMenus(): Promise<void> {
             },
             {
                 icon: contextMenuIcon(),
-                label: "附件描述",
+                label: "编辑状态",
                 filter: {
                     roles: ["GM"],
                     min: 1,
@@ -90,25 +92,34 @@ async function installContextMenus(): Promise<void> {
 }
 
 /* ------------------------------------------------------------------ */
-/* 唯一模式自动同步                                                    */
+/* 新物件套用素材                                                       */
 /* ------------------------------------------------------------------ */
 
 let lastItems: Item[] = [];
-let syncing = false;
+let applying = false;
 
 /**
- * 对新加入场景的物件套用持久化存档。
+ * 物件变化时：给新物件套用素材库里对应的条目。
  *
- * 这是「存档能在下次拖出同一张图片时自动恢复」的关键一步：
- * 用户为某张图片存了模板后，即便场景里的物件全被删除，
- * 再次拖出该图片时，这里会把存档里的 metadata（含 status-peek/text）写回物件。
+ * 这是「素材库」的核心自动化价值：用户从素材库拖出一张图，
+ * 若库里有关于这张图的条目，状态（含轮数起点）与子物件位置会自动恢复。
  *
- * 【为什么只处理新增】applyPersisted 自身会写物件，写又会触发 onChange；
- * 若对所有物件反复套用，容易形成回环。只认「上次快照里没有的 id」即可断环。
+ * 【为什么只处理新增】
+ * 套用会写物件，写又会触发 onChange；若对所有物件反复套用容易形成回环。
+ * 只认「上次快照里没有的 id」即可断环。
+ *
+ * 【为什么不再自动回写】
+ * 旧版有个「唯一模式自动同步」：物件在场景中被改动后自动回写存档。
+ * 合并后去掉了 —— 素材库是「模板」而不是「活文档」，
+ * GM 改一个字就悄悄改掉素材太容易失控。需要更新时在面板里
+ * 手动「存为素材」即可，行为更可预期。
  */
-async function applyToNewItems(items: Item[], prev: Item[]): Promise<void> {
-    // prev 为空说明这是首次拉取基线，场景里的物件都算「已存在」，不该套用
-    if (prev.length === 0) {
+async function handleItemsChange(items: Item[]): Promise<void> {
+    const prev = lastItems;
+    lastItems = items;
+
+    // 基线为空说明场景刚加载完，此时不套用（否则会把库里的东西倒灌进旧场景）
+    if (prev.length === 0 || applying) {
         return;
     }
 
@@ -118,63 +129,81 @@ async function applyToNewItems(items: Item[], prev: Item[]): Promise<void> {
         return;
     }
 
-    await applyPersisted(added);
-}
-
-/** 物件变化时：先给新物件套用存档，再把 UNIQUE 项的最新状态回写 */
-async function handleItemsChange(items: Item[]): Promise<void> {
-    const prev = lastItems;
-    // 基线始终保持最新，避免 applyPersisted 引发的变更让后续判断失真
-    lastItems = items;
-
-    if (syncing) {
-        return;
-    }
-
-    // 场景首次加载时 prev 为空，此时不触发（避免把空数据写进去）
-    if (prev.length === 0) {
-        return;
-    }
-
-    syncing = true;
+    applying = true;
     try {
-        await applyToNewItems(items, prev);
-        syncUniqueTokens(items, prev);
+        await applyToNewItems(added);
+    } catch (e) {
+        console.warn("[status-peek] 新物件套用素材失败", e);
     } finally {
-        syncing = false;
+        applying = false;
     }
 }
 
 OBR.onReady(() => {
-    // 只有 GM 需要右键菜单与自动同步
     void (async () => {
+        // hover 模式：GM 和玩家都需要（玩家端的主要用途）
+        await installHoverMode();
+
+        // 浮层页面用它回报真实高度，好把 popover 收到刚好容纳卡片。
+        // 少这一句，iframe 会比卡片高，多出来的透明区域就看着像「黑边」。
+        listenForResize();
+
+        // 监听先攻回合变化 → 到期标记为「已结束」。
+        // 写入只在 GM 侧做（见 rounds.ts），玩家侧仅用于浮层刷新。
+        watchRounds(() => {
+            // 回合变了，若浮层还开着则让它下次移动时重建
+            void closePopoverIfOpen();
+        });
+
         const role = await OBR.player.getRole();
-        if (role !== "GM") {
-            return;
-        }
 
-        // 载入本地存储（在注册菜单前，保证菜单 filter 里的数据是最新的）
-        load();
-
-        await installContextMenus();
-
-        // 初次拉取当前场景物件作为基线
-        if (await OBR.scene.isReady()) {
-            lastItems = await OBR.scene.items.getItems();
-            void OBR.scene.items.onChange((items) => {
-                void handleItemsChange(items);
-            });
-        } else {
-            OBR.scene.onReadyChange((ready) => {
-                if (ready) {
-                    void OBR.scene.items.getItems().then((items) => {
-                        lastItems = items;
-                    });
+        // GM 启动时立刻补一次计数起点。
+        // 【为什么必须有这次主动调用】
+        // watchRounds 只在 metadata「发生变化」时回调。若先攻扩展早已在战斗、
+        // 而状态是在开打前挂上的，appliedRound 是空的，此后 metadata 未必再变，
+        // 就会一直漏补 → 状态永远不倒数。启动时主动跑一次最保险。
+        if (role === "GM") {
+            void (async () => {
+                try {
+                    const meta = await OBR.scene.getMetadata();
+                    const filled = await backfillAppliedRound(readCombatRound(meta));
+                    if (filled > 0) {
+                        console.log(
+                            `[status-peek] 启动时已为 ${filled} 个状态回填计数起点`,
+                        );
+                    }
+                } catch (e) {
+                    console.warn("[status-peek] 启动回填失败", e);
                 }
-            });
-            void OBR.scene.items.onChange((items) => {
-                void handleItemsChange(items);
-            });
+            })();
         }
+
+        // 新物件套用素材：GM 与玩家都要监听。
+    // GM 发布的房间预设必须让玩家也能自动恢复，否则玩家看到的
+    // 是「GM 那边有状态，我这边没有」。
+    if (await OBR.scene.isReady()) {
+        lastItems = await OBR.scene.items.getItems();
+        void OBR.scene.items.onChange((items) => {
+            void handleItemsChange(items);
+        });
+    } else {
+        OBR.scene.onReadyChange((ready) => {
+            if (ready) {
+                void OBR.scene.items.getItems().then((items) => {
+                    lastItems = items;
+                });
+            }
+        });
+        void OBR.scene.items.onChange((items) => {
+            void handleItemsChange(items);
+        });
+    }
+
+    if (role !== "GM") {
+        return;
+    }
+
+    // 以下都是 GM 专属
+    await installContextMenus();
     })();
 });

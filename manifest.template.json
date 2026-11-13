@@ -1,16 +1,16 @@
 {
-  "name": "附件描述",
+  "name": "状态描述",
   "version": "{{VERSION}}",
   "manifest_version": 1,
   "author": "Status Peek Plus",
-  "description": "为 PROP / ATTACHMENT 图层物件添加状态描述，并保存为唯一存档：之后重新拖出同一张图片会自动带上描述，场景中的改动也会自动回写。",
+  "description": "把自己上传的图片标记贴到 token 上，写好规则文本与持续轮数。玩家切到「查看状态描述」模式，鼠标移到标记上就能看到说明，轮数与先攻扩展的回合数联动。",
   "icon": "{{BASE}}icon-v3.svg",
   "action": {
-    "title": "附件描述",
+    "title": "状态描述",
     "icon": "{{BASE}}icon-v3.svg",
     "popover": "{{BASE}}action.html",
     "width": 360,
-    "height": 520
+    "height": 560
   },
   "background_url": "{{BASE}}background.html"
 }
