@@ -185,6 +185,10 @@ export async function applyEntry(
         // 场景里没有母本 → buildImage 构造（渲染 1 格，居中）
         const visual = await resolveStickerVisual(entry);
         const sceneDpi = await OBR.scene.grid.getDpi().catch(() => 150);
+        console.log(
+            "[状态描述] 贴纸采用参数:",
+            JSON.stringify({ visual, 目标: target.name || target.id }),
+        );
         try {
             const item = buildImage({ ...visual.image }, {
                 offset: { ...visual.grid.offset },
@@ -243,8 +247,22 @@ async function resolveStickerVisual(entry: ArchiveEntry): Promise<{
 }> {
     // 1) 场景同图实例：全量复刻
     const items = await OBR.scene.items
-        .getItems((i) => imageUrlOf(i) === entry.imageUrl)
+        .getItems((i: Item) => imageUrlOf(i) === entry.imageUrl)
         .catch(() => [] as Item[]);
+    console.log(
+        "[状态描述] 贴图解析:",
+        JSON.stringify({
+            imageUrl: entry.imageUrl,
+            场景同图实例数: items.length,
+            实例参数: items.slice(0, 1).map((it) => ({
+                position: it.position,
+                image: (it as { image?: unknown }).image,
+                grid: (it as { grid?: unknown }).grid,
+                scale: (it as { scale?: unknown }).scale,
+            }))[0],
+            快照参数: entry.snapshot ?? null,
+        }),
+    );
     for (const it of items) {
         const ic = (
             it as {
