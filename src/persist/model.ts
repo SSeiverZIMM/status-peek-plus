@@ -38,6 +38,11 @@ interface PersistedTokenBase {
     /** 所属分组。undefined 视为无分组。 */
     readonly groups?: string[];
     readonly type: PersistenceType;
+    /**
+     * 纯文字状态：只保存描述文本，不关联图片。
+     * 套用行为与贴纸存档不同（写到选中的 ATTACHMENT 物件上）。
+     */
+    readonly textOnly?: boolean;
 }
 
 /** 旧版（v1）数据格式，保留兼容读取 */
@@ -103,6 +108,7 @@ export function isPersistedToken(t: unknown): t is PersistedToken {
             "groups",
             (g) => Array.isArray(g) && g.every(isString),
         ) &&
+        containsImplies(t, "textOnly", (v) => typeof v === "boolean") &&
         "type" in t &&
         isPersistenceType(t.type);
 
@@ -144,6 +150,11 @@ export function persistedTokenFull(
     pt: PersistedToken,
 ): pt is PersistedTokenBase & PersistDataV2 {
     return "token" in pt;
+}
+
+/** 是否为纯文字状态（只保存描述文本，无图片） */
+export function isTextStatus(pt: PersistedToken): boolean {
+    return pt.textOnly === true;
 }
 
 /** 持久化项的唯一键 —— 统一为图片 URL */

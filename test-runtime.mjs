@@ -14,9 +14,9 @@
 import { build } from "esbuild";
 import fs from "node:fs";
 import path from "node:path";
-import { pathToFileURL } from "node:url";
+import { pathToFileURL, fileURLToPath } from "node:url";
 
-const ROOT = "C:/Users/29772/WorkBuddy/2026-09-02-21-26-21/status-peek-plus";
+const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const TMP = path.join(ROOT, ".test-build");
 
 let pass = 0;
@@ -314,6 +314,22 @@ eq(
 );
 
 /* ---------------- 汇总 ---------------- */
+
+console.log("\n=== 19. 纯文字状态（v1.2 套用逻辑）===");
+S.load();
+const before = S.getTokens().length;
+const ts = S.addTextStatus("潜行中", "移动时不发出声音，察觉检定有优势。");
+ok(S.getTokens().length === before + 1, "新增 1 项");
+ok(M.isTextStatus(S.getTokens().at(-1)), "textOnly 旗标为真");
+ok(S.findByKey(ts.imageUrl) !== undefined, "按合成键（text:uuid）能查到");
+ok(
+  M.persistedTokenGetMetadata(S.getTokens().at(-1))["status-peek/has"] === true,
+  "描述已写入 metadata"
+);
+ok(
+  M.isPersistedToken(S.getTokens().at(-1)),
+  "条目通过 isPersistedToken 校验（可导入导出）"
+);
 
 console.log("\n" + "=".repeat(46));
 console.log(`结果：${pass} 通过 / ${fail} 失败`);

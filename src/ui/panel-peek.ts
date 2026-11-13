@@ -7,7 +7,13 @@
 
 import OBR, { type Item } from "@owlbear-rodeo/sdk";
 import { MODAL_EDIT_ID, readPeek, siblingUrl } from "../shared";
-import { findByKey, getTokens, persist, removeToken } from "../persist/store";
+import {
+    addTextStatus,
+    findByKey,
+    getTokens,
+    persist,
+    removeToken,
+} from "../persist/store";
 import { persistedTokenKey, persistedTokenGetName } from "../persist/model";
 
 export interface PeekPanelCtx {
@@ -130,6 +136,28 @@ export function renderPeekPanel(ctx: PeekPanelCtx): void {
                 }
             });
             head.appendChild(saveBtn);
+
+            // 存为纯文字状态（v1.2）：只保存描述文本，不关联图片
+            const textBtn = el("button", "btn", "存为文字状态");
+            textBtn.title = "只保存该物件的描述文本（不关联图片），之后可从模板页一键套用到任意附件上";
+            textBtn.addEventListener("click", () => {
+                const cur = readPeek(item.metadata);
+                if (!cur.has || !cur.text) {
+                    void OBR.notification.show(
+                        "该物件还没有描述文本，请先「编辑」写入",
+                        "WARNING",
+                    );
+                    return;
+                }
+                const name =
+                    item.name || `文字状态 ${cur.text.slice(0, 10)}`;
+                addTextStatus(name, cur.text);
+                void OBR.notification.show(
+                    `已保存文字状态「${name}」`,
+                    "SUCCESS",
+                );
+            });
+            head.appendChild(textBtn);
 
             // 编辑按钮
             const editBtn = el("button", "btn", peek.has ? "编辑" : "设置");

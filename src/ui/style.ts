@@ -111,6 +111,22 @@ export const CSS = `
     border: 1px solid #f0dada; border-radius: 5px;
     padding: 5px 8px; margin-bottom: 8px; line-height: 1.6;
   }
+  .tpl-thumb-text {
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; cursor: default;
+  }
+  #creator {
+    display: none; flex-direction: column; gap: 6px;
+    padding: 8px 12px; border-bottom: 1px solid #eef1f4; flex: none;
+  }
+  #creator.open { display: flex; }
+  #creator input, #creator textarea {
+    border: 1px solid #d8dce2; border-radius: 6px;
+    padding: 5px 8px; font-size: 12.5px; font-family: inherit;
+    background: #fbfcfd; color: #333; resize: vertical;
+  }
+  #creator input:focus, #creator textarea:focus { outline: none; border-color: #9dbdd4; }
+  #creator .tpl-row { margin-bottom: 0; }
 
   /* ---------- 顶部工具条 ---------- */
   #toolbar {
@@ -213,6 +229,11 @@ export const CSS = `
   body.dark .tpl-toggle.on { background: #24323d; border-color: #3d5a6e; color: #8fc3e0; }
   body.dark .tpl-note { color: #6f7885; }
   body.dark .tpl-warn { background: #3a2727; border-color: #5e3d3d; color: #d99b9b; }
+  body.dark .tpl-thumb-text { background: #2a2e37; border-color: #3a4150; }
+  body.dark #creator { border-bottom-color: #2f3540; }
+  body.dark #creator input, body.dark #creator textarea {
+    background: #262a32; border-color: #454b58; color: #ccd0d8;
+  }
   body.dark #toolbar { border-bottom-color: #2f3540; }
   body.dark #search { background: #262a32; border-color: #454b58; color: #d7dae0; }
   body.dark #search:focus { border-color: #3d5a6e; background: #2a2e37; }

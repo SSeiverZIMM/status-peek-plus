@@ -9,6 +9,7 @@
 
 import type { Item } from "@owlbear-rodeo/sdk";
 import { processAttachments } from "./attachments";
+import { writePeek } from "../shared";
 import {
     dateLte,
     persistedTokenKey,
@@ -313,6 +314,28 @@ export function removeToken(key: string): void {
         save();
         notify();
     }
+}
+
+/**
+ * 新增一条「纯文字状态」。
+ *
+ * 与贴纸存档的区别：不关联任何图片（imageUrl 用合成键占位），
+ * 「套用」行为是把文字写到选中的 ATTACHMENT 物件上，而不是恢复贴纸。
+ */
+export function addTextStatus(name: string, text: string): PersistedToken {
+    beginWrite();
+    const entry: PersistedToken = {
+        type: "TEMPLATE",
+        textOnly: true,
+        name,
+        metadata: writePeek(text),
+        lastModified: Date.now(),
+        imageUrl: `text:${crypto.randomUUID()}`,
+    } as PersistedToken;
+    state.tokens.push(entry);
+    save();
+    notify();
+    return entry;
 }
 
 /** 导入（合并式，同 key 覆盖） */

@@ -34,7 +34,9 @@ async function refresh(): Promise<void> {
     if (activeTab === "peek") {
         renderPeekPanel(currentCtx(targets));
     } else {
-        renderTemplatePanel(panel, countEl, targets);
+        // 模板页需要完整选中项：套用按钮要识别 CHARACTER（贴纸目标）
+        // 与 ATTACHMENT（文字目标）两类物件，不能在这里预过滤
+        renderTemplatePanel(panel, countEl, selected);
     }
 }
 

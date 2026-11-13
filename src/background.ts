@@ -9,7 +9,6 @@
 import OBR, { type ContextMenuContext, type Item } from "@owlbear-rodeo/sdk";
 import { MODAL_EDIT_ID, isTargetLayer, selfBaseUrl, siblingUrl } from "./shared";
 import { load, syncUniqueTokens } from "./persist/store";
-import { applyPersisted } from "./persist/apply";
 
 /**
  * 右键菜单 ID
@@ -94,55 +93,31 @@ async function installContextMenus(): Promise<void> {
 /* ------------------------------------------------------------------ */
 
 let lastItems: Item[] = [];
-let syncing = false;
 
 /**
- * 对新加入场景的物件套用持久化存档。
+ * 【v1.2 变更】「新物件自动套用存档」机制已移除。
  *
- * 这是「存档能在下次拖出同一张图片时自动恢复」的关键一步：
- * 用户为某张图片存了模板后，即便场景里的物件全被删除，
- * 再次拖出该图片时，这里会把存档里的 metadata（含 status-peek/text）写回物件。
+ * 原机制按图片 URL 匹配：新拖出的物件若与某条存档同图，自动回写描述。
+ * 实际使用中暴露两个问题：① attachment 物件贴到角色上的时序里套用不稳定；
+ * ② 同图不同用途的场景会误套用（如 NOTE 层物件也被写入描述）。
  *
- * 【为什么只处理新增】applyPersisted 自身会写物件，写又会触发 onChange；
- * 若对所有物件反复套用，容易形成回环。只认「上次快照里没有的 id」即可断环。
+ * 取而代之的是模板页的显式「套用」按钮：
+ *  - 带图标的贴纸存档 → 一键贴到选中的角色 token 上
+ *  - 纯文字状态 → 套用到选中的 ATTACHMENT 物件上
+ * 见 src/ui/panel-templates.ts。
+ *
+ * 保留的是 UNIQUE 模式的「回写」：场景中物件的变化自动更新到它对应的存档，
+ * 这是存档数据的维护机制，与套用无关。
  */
-async function applyToNewItems(items: Item[], prev: Item[]): Promise<void> {
-    // prev 为空说明这是首次拉取基线，场景里的物件都算「已存在」，不该套用
-    if (prev.length === 0) {
-        return;
-    }
-
-    const prevIds = new Set(prev.map((i) => i.id));
-    const added = items.filter((i) => !prevIds.has(i.id));
-    if (added.length === 0) {
-        return;
-    }
-
-    await applyPersisted(added);
-}
-
-/** 物件变化时：先给新物件套用存档，再把 UNIQUE 项的最新状态回写 */
 async function handleItemsChange(items: Item[]): Promise<void> {
     const prev = lastItems;
-    // 基线始终保持最新，避免 applyPersisted 引发的变更让后续判断失真
     lastItems = items;
 
-    if (syncing) {
-        return;
-    }
-
-    // 场景首次加载时 prev 为空，此时不触发（避免把空数据写进去）
     if (prev.length === 0) {
         return;
     }
 
-    syncing = true;
-    try {
-        await applyToNewItems(items, prev);
-        syncUniqueTokens(items, prev);
-    } finally {
-        syncing = false;
-    }
+    syncUniqueTokens(items, prev);
 }
 
 OBR.onReady(() => {
