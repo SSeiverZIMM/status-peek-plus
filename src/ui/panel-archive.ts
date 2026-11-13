@@ -179,10 +179,33 @@ function buildEditor(
     roundsInput.step = "1";
     roundsInput.value = String(entry?.rounds ?? 3);
 
+    // 颜色：素材库固定色标（与编辑弹窗一致，保证互相匹配检索）。
+    // colorInput 退化为隐藏域，仅承载当前值供保存逻辑读取。
     const colorInput = el("input") as HTMLInputElement;
-    colorInput.type = "color";
+    colorInput.type = "hidden";
     colorInput.value =
         entry && HEX.test(entry.color) ? entry.color : "#ff00d0";
+
+    const colorRow = el("div", "lib-row color-row");
+    const paintSwatches = (): void => {
+        colorRow.innerHTML = "";
+        for (const c of PRESET_COLORS) {
+            const b = el("button", "swatch");
+            b.type = "button";
+            b.style.background = c;
+            b.title = c;
+            b.classList.toggle(
+                "selected",
+                c.toLowerCase() === colorInput.value.toLowerCase(),
+            );
+            b.addEventListener("click", () => {
+                colorInput.value = c;
+                paintSwatches();
+            });
+            colorRow.appendChild(b);
+        }
+    };
+    paintSwatches();
 
     const row = el("div", "lib-row");
     row.appendChild(roundsInput);
@@ -245,6 +268,7 @@ function buildEditor(
     wrap.appendChild(bindHint);
     wrap.appendChild(nameInput);
     wrap.appendChild(descInput);
+    wrap.appendChild(colorRow);
     wrap.appendChild(row);
     wrap.appendChild(scopeSlot);
     wrap.appendChild(actions);

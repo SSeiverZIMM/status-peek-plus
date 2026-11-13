@@ -268,10 +268,15 @@ import"./shared-Di2CeDPH.js";const p="spp-style",r=`
   .lib-editor textarea { min-height: 90px; resize: vertical; line-height: 1.6; }
   .lib-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
   .lib-row input[type="number"] { width: 70px; margin-bottom: 0; }
-  .lib-row input[type="color"] {
-    width: 34px; height: 28px; padding: 0;
-    border: 1px solid var(--spp-line);
-    border-radius: 6px; background: none; cursor: pointer;
+  .lib-row .color-row { flex-wrap: wrap; gap: 6px; }
+  .color-row .swatch {
+    width: 22px; height: 22px; border-radius: 5px;
+    border: 1px solid var(--spp-line); cursor: pointer;
+    transition: transform 0.1s ease;
+  }
+  .color-row .swatch:hover { transform: scale(1.15); }
+  .color-row .swatch.selected {
+    outline: 2px solid var(--spp-accent); outline-offset: 1px;
   }
   .lib-hint { font-size: 11.5px; color: var(--spp-text-3); flex: 1; }
   .lib-actions { display: flex; justify-content: flex-end; gap: 8px; }
