@@ -80,6 +80,8 @@ export function sanitizeEntry(raw: unknown): ArchiveEntry | null {
     if (isObject(raw.snapshot)) {
         const s = raw.snapshot;
         const pos = isObject(s.position) ? s.position : {};
+        // 绑定图标的图片内容（含尺寸与 MIME）——套用贴图时必需
+        const img = isObject(s.image) ? s.image : {};
         snapshot = {
             layer: typeof s.layer === "string" ? s.layer : "ATTACHMENT",
             zIndex: typeof s.zIndex === "number" ? s.zIndex : undefined,
@@ -88,6 +90,19 @@ export function sanitizeEntry(raw: unknown): ArchiveEntry | null {
                 y: typeof pos.y === "number" ? pos.y : 0,
             },
             name: typeof s.name === "string" ? s.name : "",
+            image:
+                typeof img.url === "string" && img.url
+                    ? {
+                          url: img.url,
+                          width: typeof img.width === "number" ? img.width : 0,
+                          height:
+                              typeof img.height === "number" ? img.height : 0,
+                          mime:
+                              typeof img.mime === "string"
+                                  ? img.mime
+                                  : "image/png",
+                      }
+                    : undefined,
             attachments: s.attachments ?? [],
             lastModified:
                 typeof s.lastModified === "string"
@@ -473,6 +488,18 @@ export async function captureFromItem(
             zIndex: item.zIndex,
             position: item.position,
             name: item.name,
+            // 图标完整图片内容（含尺寸与 MIME）：套用贴图时必需，
+            // 否则新建的 attachment 缺尺寸会渲染成不可见
+            image: (
+                item as {
+                    image?: {
+                        url: string;
+                        width: number;
+                        height: number;
+                        mime: string;
+                    };
+                }
+            ).image,
             // 附件存相对坐标：processAttachments 会减去宿主位置并把
             // attachedTo 换成 ROOT，restoreAttachments 再还原。
             attachments: processAttachmentsSafe(item, attachments),

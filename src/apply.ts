@@ -54,11 +54,13 @@ export interface ApplyResult {
  * 把一条素材套用到给定的物件上。
  *
  * 三种情况：
- *   1. **纯文字预设**（无 imageUrl）→ 直接把状态写到目标物件的 metadata。
- *      适合「选中 5 个怪物批量施加同一个效果」。
+ *   1. **纯文字预设**（无 imageUrl）→ 把状态写到目标的 metadata。
+ *      【v2.0.1】目标仅限 ATTACHMENT 层，其他层跳过（用户规则）。
  *   2. **带图标**→ 在目标 token 上新建（或复用）一个 ATTACHMENT 图层物件，
  *      把状态写在**图**上。符合「attachment 是唯一载体」这个前提：
  *      状态必须挂在图上，跟着它移动。
+ *      【v2.0.1】新建时补全图片尺寸与 MIME（缺失会渲染成不可见），
+ *      并把贴纸居中放在目标 token 上。
  *   3. 目标自己就是那张图 → 直接写它。
  */
 export async function applyEntry(
@@ -70,17 +72,28 @@ export async function applyEntry(
 
     const round = await currentRound();
     const patch = peekPatchOf(entry, round ?? -1);
+    const targets = await OBR.scene.items
+        .getItems([...targetIds])
+        .catch(() => [] as Item[]);
 
-    // --- 纯文字预设 ---
+    // --- 纯文字预设：仅限 ATTACHMENT 层（v2.0.1） ---
     if (!entry.imageUrl) {
-        await OBR.scene.items.updateItems([...targetIds], (drafts) => {
-            for (const d of drafts) Object.assign(d.metadata, patch);
-        });
-        result.written = targetIds.length;
+        const okTargets = targets.filter((t) => t.layer === "ATTACHMENT");
+        result.failed = targets.length - okTargets.length;
+        if (okTargets.length > 0) {
+            await OBR.scene.items.updateItems(
+                okTargets.map((t) => t.id),
+                (drafts) => {
+                    for (const d of drafts) Object.assign(d.metadata, patch);
+                },
+            );
+            result.written = okTargets.length;
+        }
         return result;
     }
 
-    const targets = await OBR.scene.items.getItems([...targetIds]);
+    // --- 带图标：解析完整图片内容（尺寸/MIME 缺失会渲染成不可见） ---
+    const imgContent = await resolveImageContent(entry);
 
     for (const target of targets) {
         // 目标自己就是那张图
@@ -104,7 +117,11 @@ export async function applyEntry(
             continue;
         }
 
-        // 新建 attachment
+        // 新建 attachment：居中放在目标 token 上
+        const tW = (target as { width?: number }).width ?? 0;
+        const tH = (target as { height?: number }).height ?? 0;
+        const centerX = target.position.x + tW / 2;
+        const centerY = target.position.y + tH / 2;
         const newId = crypto.randomUUID();
         try {
             await OBR.scene.items.addItems([
@@ -113,11 +130,14 @@ export async function applyEntry(
                     type: "IMAGE",
                     layer: "ATTACHMENT",
                     attachedTo: target.id,
-                    position: { x: target.position.x, y: target.position.y },
+                    position: {
+                        x: centerX - imgContent.width / 2,
+                        y: centerY - imgContent.height / 2,
+                    },
                     zIndex: (target.zIndex ?? 0) + 1,
                     name: entry.name || "状态图标",
-                    // Item 类型里没有 image 字段（宿主运行时的扩展字段）
-                    image: { url: entry.imageUrl },
+                    // 完整图片内容：缺尺寸在枭熊里渲染成不可见
+                    image: { ...imgContent },
                     metadata: { ...patch },
                     lastModified: new Date().toISOString(),
                 } as unknown as Item,
@@ -129,6 +149,77 @@ export async function applyEntry(
     }
 
     return result;
+}
+
+/**
+ * 解析素材图标的完整图片内容（width/height/mime）。
+ *
+ * 解析顺序：条目快照 → 场景里同图实例 → 加载图片取自然尺寸。
+ * 没有尺寸的图片在枭熊里会渲染成不可见——这是「attachment 套不上」的元凶。
+ */
+async function resolveImageContent(entry: ArchiveEntry): Promise<{
+    url: string;
+    width: number;
+    height: number;
+    mime: string;
+}> {
+    const fallback = {
+        url: entry.imageUrl,
+        width: 150,
+        height: 150,
+        mime: "image/png",
+    };
+
+    // 1) 条目快照里存的图标内容
+    const snapImg = entry.snapshot?.image;
+    if (snapImg && snapImg.width > 0 && snapImg.height > 0) {
+        return snapImg;
+    }
+
+    // 2) 场景里找同图实例，借用它的图片内容
+    const items = await OBR.scene.items
+        .getItems((i) => imageUrlOf(i) === entry.imageUrl)
+        .catch(() => [] as Item[]);
+    for (const it of items) {
+        const ic = (
+            it as {
+                image?: {
+                    url?: string;
+                    width?: number;
+                    height?: number;
+                    mime?: string;
+                };
+            }
+        ).image;
+        if (
+            ic &&
+            typeof ic.width === "number" &&
+            ic.width > 0 &&
+            typeof ic.height === "number" &&
+            ic.height > 0
+        ) {
+            return {
+                url: entry.imageUrl,
+                width: ic.width,
+                height: ic.height,
+                mime: typeof ic.mime === "string" ? ic.mime : "image/png",
+            };
+        }
+    }
+
+    // 3) 兜底：直接加载图片取自然尺寸
+    const dims = await new Promise<{ w: number; h: number }>((resolve) => {
+        const im = new Image();
+        im.onload = () =>
+            resolve({
+                w: im.naturalWidth || 150,
+                h: im.naturalHeight || 150,
+            });
+        im.onerror = () => resolve({ w: 150, h: 150 });
+        im.src = entry.imageUrl;
+        setTimeout(() => resolve({ w: 150, h: 150 }), 3000);
+    });
+    return { ...fallback, width: dims.w, height: dims.h };
 }
 
 /**

@@ -341,7 +341,7 @@ function buildCard(
 
     // --- 快速操作：套用到选中 ---
     const applyBtn = el("button", "btn primary", "套用到选中");
-    applyBtn.title = "把这条素材放到当前选中的物件上（带图标的会自动贴图）";
+    applyBtn.title = "把这条素材套用到当前选中的物件上：带图标的贴纸会贴到角色/物件上；纯文字状态仅支持 ATTACHMENT 层物件";
     applyBtn.addEventListener("click", () => {
         void (async () => {
             const ids = (await OBR.player.getSelection()) ?? [];

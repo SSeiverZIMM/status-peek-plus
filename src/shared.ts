@@ -100,6 +100,8 @@ export interface ArchiveEntry {
         zIndex?: number;
         position: { x: number; y: number };
         name: string;
+        /** 绑定图标的图片内容（含尺寸与 MIME）。套用贴图时用它，缺了会现场解析。 */
+        image?: { url: string; width: number; height: number; mime: string };
         /** 相对坐标的附件列表 */
         attachments: unknown;
         lastModified: string;
