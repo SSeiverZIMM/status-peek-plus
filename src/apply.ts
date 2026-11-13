@@ -106,11 +106,10 @@ export async function applyEntry(
         return result;
     }
 
-    // --- 带图标：解析完整视觉参数（图片/网格/缩放） ---
-    // 渲染尺寸 = (image.width ÷ grid.dpi) × 场景格距，三者缺一不可
-    const visual = await resolveStickerVisual(entry);
-    const sceneDpi = await OBR.scene.grid.getDpi().catch(() => 150);
-
+    // --- 带图标：优先全量克隆场景里的同图实例 ---
+    // 【v2.0.4】不再按字段拼装（image/grid/scale 的渲染模型太容易踩偏），
+    // 直接复制一条真实实例的全部字段——渲染结果与场景所见完全一致。
+    // 尺寸定位用 getItemBounds（渲染后真实包围盒），同样不依赖模型。
     for (const target of targets) {
         // 目标自己就是那张图
         if (imageUrlOf(target) === entry.imageUrl) {
@@ -124,6 +123,7 @@ export async function applyEntry(
         // 找该token 下是否已有同图的 attachment，有就复用（避免叠图）
         const existing = await OBR.scene.items.getItemAttachments([target.id]);
         const dup = existing.find((a) => imageUrlOf(a) === entry.imageUrl);
+        const dupId: string | undefined = dup?.id;
 
         if (dup) {
             await OBR.scene.items.updateItems([dup.id], (drafts) => {
@@ -133,13 +133,58 @@ export async function applyEntry(
             continue;
         }
 
-        // 新建 attachment：居中放在目标 token 上
-        // 【v2.0.2】用 buildImage 组装，grid/text 等必填字段由 SDK 默认值补齐
-        // （手写精简对象会被枭熊校验拒绝，这正是「套用 1 个失败」的来源）
-        const tW = (target as { width?: number }).width ?? 0;
-        const tH = (target as { height?: number }).height ?? 0;
-        const centerX = target.position.x + tW / 2;
-        const centerY = target.position.y + tH / 2;
+        // 场景里找同图实例作为克隆母本（排除目标自身与已复用的 dup）
+        const sources = (await OBR.scene.items
+            .getItems(
+                (i: Item) =>
+                    imageUrlOf(i) === entry.imageUrl &&
+                    i.id !== target.id &&
+                    i.id !== dupId,
+            )
+            .catch(() => [] as Item[])) as Item[];
+        const source = sources[0];
+
+        const targetBounds = await OBR.scene.items
+            .getItemBounds([target.id])
+            .catch(() => undefined);
+        const tgtCx = targetBounds
+            ? targetBounds.center.x
+            : target.position.x;
+        const tgtCy = targetBounds
+            ? targetBounds.center.y
+            : target.position.y;
+
+        if (source) {
+            // 全量克隆：除 id/挂载/位置/层级/描述外全部照抄母本
+            const srcBounds = await OBR.scene.items
+                .getItemBounds([source.id])
+                .catch(() => undefined);
+            const srcW = srcBounds ? srcBounds.width : 0;
+            const srcH = srcBounds ? srcBounds.height : 0;
+            const clone = {
+                ...source,
+                id: crypto.randomUUID(),
+                attachedTo: target.id,
+                zIndex: (target.zIndex ?? 0) + 1,
+                metadata: { ...source.metadata, ...patch },
+                position: { x: tgtCx - srcW / 2, y: tgtCy - srcH / 2 },
+            } as unknown as Item;
+            try {
+                await OBR.scene.items.addItems([clone]);
+                result.created++;
+            } catch (e) {
+                result.failed++;
+                result.errors.push(
+                    `创建贴图附件失败：${e instanceof Error ? e.message : String(e)}`,
+                );
+                console.error("[状态描述] 克隆附件失败", e);
+            }
+            continue;
+        }
+
+        // 场景里没有母本 → buildImage 构造（渲染 1 格，居中）
+        const visual = await resolveStickerVisual(entry);
+        const sceneDpi = await OBR.scene.grid.getDpi().catch(() => 150);
         try {
             const item = buildImage({ ...visual.image }, {
                 offset: { ...visual.grid.offset },
@@ -149,7 +194,6 @@ export async function applyEntry(
                 .scale({ x: visual.scale.x, y: visual.scale.y })
                 .build();
             item.attachedTo = target.id;
-            // 渲染尺寸（场景像素）= 格数 × 场景格距 × 缩放
             const renderedW =
                 (visual.image.width / visual.grid.dpi) *
                 sceneDpi *
@@ -159,8 +203,8 @@ export async function applyEntry(
                 sceneDpi *
                 visual.scale.y;
             item.position = {
-                x: centerX - renderedW / 2,
-                y: centerY - renderedH / 2,
+                x: tgtCx - renderedW / 2,
+                y: tgtCy - renderedH / 2,
             };
             item.zIndex = (target.zIndex ?? 0) + 1;
             item.name = entry.name || "状态图标";
